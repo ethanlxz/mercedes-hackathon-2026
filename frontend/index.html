@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MBUX Mobility Assistant Dashboard</title>
+  
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=Roboto+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+  
+  <!-- Leaflet Map CSS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
+  
+  <!-- FontAwesome for icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+  
+  <!-- Local Style -->
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="mbux-container">
+    
+    <!-- HEADER BAR -->
+    <header class="mbux-header">
+      <div class="header-left">
+        <div class="mercedes-logo">
+          <svg viewBox="0 0 100 100" class="star-svg">
+            <circle cx="50" cy="50" r="45" fill="none" stroke="currentColor" stroke-width="2" />
+            <path d="M50,12 L50,50 L20,68 M50,50 L80,68" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" />
+          </svg>
+        </div>
+        <div class="brand-text">
+          <h1>MERCEDES-BENZ</h1>
+          <span class="sub-brand">MBUX Mobility Assistant v2.5</span>
+        </div>
+      </div>
+      
+      <div class="header-center">
+        <div class="system-status">
+          <span class="status-dot green"></span>
+          <span id="system-status-text">SYSTEM ACTIVE</span>
+        </div>
+      </div>
+      
+      <div class="header-right">
+        <div class="wallet-badge" id="wallet-badge-btn">
+          <i class="fa-solid fa-wallet"></i>
+          <span class="wallet-label">Mobility Wallet:</span>
+          <span class="wallet-value" id="wallet-balance-display">RM 150.00</span>
+          <button class="btn-topup-header" title="Quick Top Up RM50" onclick="topUpWallet(50)">
+            <i class="fa-solid fa-plus"></i>
+          </button>
+        </div>
+        <div class="weather-clock">
+          <span id="exterior-temp"><i class="fa-solid fa-cloud-sun"></i> 31°C</span>
+          <span class="separator">|</span>
+          <span id="clock-display">18:55</span>
+        </div>
+      </div>
+    </header>
+    
+    <!-- MAIN COCKPIT DASHBOARD -->
+    <main class="mbux-grid">
+      
+      <!-- LEFT PANEL: VEHICLE SYSTEMS & GAUGES -->
+      <section class="panel glass-panel left-panel">
+        <div class="panel-header">
+          <h2><i class="fa-solid fa-gauge-high"></i> Vehicle Telemetry</h2>
+        </div>
+        
+        <div class="panel-content">
+          
+          <!-- SPEEDOMETER -->
+          <div class="telemetry-gauge">
+            <div class="speed-radial">
+              <svg viewBox="0 0 120 120" class="gauge-svg">
+                <circle cx="60" cy="60" r="50" class="gauge-bg" />
+                <circle cx="60" cy="60" r="50" class="gauge-fill" id="speed-gauge-fill" stroke-dasharray="314" stroke-dashoffset="157" />
+              </svg>
+              <div class="gauge-value">
+                <span class="number" id="speed-val">0</span>
+                <span class="unit">km/h</span>
+              </div>
+            </div>
+            <div class="speed-control">
+              <label for="speed-slider">Speed Override (km/h):</label>
+              <input type="range" id="speed-slider" min="0" max="150" value="110" step="5">
+            </div>
+          </div>
+          
+          <!-- BATTERY STATUS -->
+          <div class="telemetry-card battery-card" id="battery-status-container">
+            <div class="telemetry-card-top">
+              <span class="card-title"><i class="fa-solid fa-battery-three-quarters"></i> Battery (SoC)</span>
+              <span class="card-val" id="battery-pct">100%</span>
+            </div>
+            <div class="battery-bar-container">
+              <div class="battery-bar-fill" id="battery-bar-fill" style="width: 100%;"></div>
+            </div>
+            <div class="battery-details">
+              <span>Est. Range: <strong id="range-val">400 km</strong></span>
+              <span class="warning-text" id="battery-warning" style="display: none;"><i class="fa-solid fa-circle-exclamation"></i> Low Charge</span>
+            </div>
+          </div>
+          
+          <!-- ATTENTION ASSIST (FATIGUE) -->
+          <div class="telemetry-card fatigue-card" id="fatigue-container">
+            <div class="telemetry-card-top">
+              <span class="card-title"><i class="fa-solid fa-eye"></i> Attention Assist</span>
+              <span class="card-val fatigue-label-badge" id="fatigue-label">Low Fatigue</span>
+            </div>
+            <div class="fatigue-bar-container">
+              <div class="fatigue-bar-fill" id="fatigue-bar-fill" style="width: 10%;"></div>
+            </div>
+            <div class="fatigue-slider-control">
+              <label for="fatigue-slider">Simulate Fatigue Level:</label>
+              <select id="fatigue-selector" onchange="onFatigueChange(this.value)">
+                <option value="Low">Low (Alert)</option>
+                <option value="Medium">Medium (Drowsy)</option>
+                <option value="High">High (Fatigued / Sleepy)</option>
+              </select>
+              <div class="auto-fatigue-checkbox">
+                <input type="checkbox" id="auto-fatigue" checked>
+                <label for="auto-fatigue">Increase fatigue over time</label>
+              </div>
+            </div>
+          </div>
+          
+          <!-- CLIMATE ENVIRONMENT -->
+          <div class="telemetry-card climate-card">
+            <div class="telemetry-card-top">
+              <span class="card-title"><i class="fa-solid fa-wind"></i> Cabin Climate</span>
+              <span class="card-val" id="climate-temp">22.0°C</span>
+            </div>
+            <div class="climate-controls">
+              <button class="btn-climate" onclick="adjustClimate(-0.5)"><i class="fa-solid fa-minus"></i></button>
+              <div class="climate-status">
+                <span class="ac-badge active">AUTO A/C</span>
+                <span class="fan-level"><i class="fa-solid fa-fan"></i> Level 3</span>
+              </div>
+              <button class="btn-climate" onclick="adjustClimate(0.5)"><i class="fa-solid fa-plus"></i></button>
+            </div>
+          </div>
+          
+        </div>
+      </section>
+      
+      <!-- CENTER PANEL: MAP & DRIVING CONTROL -->
+      <section class="panel main-map-panel">
+        
+        <!-- Interactive Leaflet Map -->
+        <div id="map"></div>
+        
+        <!-- OVERLAYS ON THE MAP -->
+        <!-- Simulation Control Overlay -->
+        <div class="map-overlay sim-control-overlay">
+          <button class="btn-primary btn-sim" id="btn-toggle-sim" onclick="toggleSimulation()">
+            <i class="fa-solid fa-play"></i> Start Trip Simulation
+          </button>
+          
+          <div class="sim-speed-selector">
+            <label for="sim-speed">Speed multiplier:</label>
+            <select id="sim-speed" onchange="changeSimSpeed(this.value)">
+              <option value="1">1x (Realtime)</option>
+              <option value="10" selected>10x (Fast)</option>
+              <option value="50">50x (Warp)</option>
+            </select>
+          </div>
+          
+          <div class="route-info-bar" style="display: none;" id="route-info-panel">
+            <span id="route-title">KL → Penang</span>
+            <span class="route-details" id="route-progress-txt">Progress: 0% | ETA: 4h 15m</span>
+          </div>
+        </div>
+
+        <!-- Assistant AI Chat and Command Line Box -->
+        <div class="map-overlay command-overlay">
+          <div class="mbux-chat-display" id="chat-output-container">
+            <div class="chat-bubble assistant">
+              <div class="chat-sender">MBUX Assistant</div>
+              <div class="chat-text">Welcome, Ethan. I am monitoring your drive metrics. Where would you like to go today? You can say <strong>"Plan my trip from KL to Penang"</strong>.</div>
+            </div>
+          </div>
+          <form id="command-form" class="command-form" onsubmit="handleCommandSubmit(event)">
+            <i class="fa-solid fa-microphone mic-icon" title="Voice assistant active"></i>
+            <input type="text" id="command-input" placeholder="Ask MBUX... (e.g. 'Plan my trip from KL to Penang')" autocomplete="off">
+            <button type="submit" class="btn-send"><i class="fa-solid fa-paper-plane"></i></button>
+          </form>
+        </div>
+        
+      </section>
+      
+      <!-- RIGHT PANEL: PROACTIVE RECOMMENDATIONS & WALLET ACTIVITY -->
+      <section class="panel glass-panel right-panel">
+        <div class="panel-header">
+          <h2><i class="fa-solid fa-wand-magic-sparkles"></i> MBUX Proactive Actions</h2>
+        </div>
+        
+        <div class="panel-content">
+          
+          <!-- ACTIVE SUGGESTIONS CONTAINER -->
+          <div class="recommendations-container" id="recommendations-list">
+            <div class="no-recs">
+              <i class="fa-solid fa-shield-halved"></i>
+              <p>MBUX is analyzing. No warnings or suggestions at this moment.</p>
+            </div>
+          </div>
+          
+          <!-- DETAILED JSON OUTPUT INSPECTOR -->
+          <div class="json-inspector-card">
+            <div class="json-header" onclick="toggleJsonInspector()">
+              <span><i class="fa-solid fa-code"></i> AI Recommendations Payload (JSON)</span>
+              <i class="fa-solid fa-chevron-down" id="json-chevron"></i>
+            </div>
+            <div class="json-body" id="json-content-container" style="display: none;">
+              <pre><code id="json-payload-display">{ "recommendations": [] }</code></pre>
+            </div>
+          </div>
+
+          <!-- MOBILITY WALLET TRANS ACTIONS LOG -->
+          <div class="wallet-transactions-card">
+            <h3><i class="fa-solid fa-clock-rotate-left"></i> Transaction Feed</h3>
+            <div class="transaction-list" id="transaction-log-list">
+              <div class="log-entry system">
+                <span class="log-time">18:53</span>
+                <span class="log-desc">MBUX Mobility Wallet initialized with RM 150.00.</span>
+              </div>
+            </div>
+          </div>
+          
+        </div>
+      </section>
+      
+    </main>
+  </div>
+  
+  <!-- Leaflet Map JS -->
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+  
+  <!-- App JS Logic -->
+  <script src="app.js"></script>
+</body>
+</html>

@@ -1,0 +1,44 @@
+{
+  "profile": {
+    "name": "Ethan",
+    "wallet_balance": 150.0,
+    "preferences": {
+      "cabin_temp_c": 21.0,
+      "favorite_music_genre": "Lo-Fi Beats"
+    }
+  },
+  "frequent_trips": [
+    {
+      "origin": "Kuala Lumpur",
+      "destination": "Penang",
+      "stops": [
+        {
+          "location": "Starbucks Ipoh",
+          "type": "rest_stop",
+          "reason": "Frequent coffee stop on KL -> Penang route",
+          "confidence": 0.95
+        },
+        {
+          "location": "Shell Recharge Tapah",
+          "type": "charging",
+          "reason": "Usual high-speed EV charging point",
+          "confidence": 0.88
+        }
+      ]
+    }
+  ],
+  "trip_history": [
+    {
+      "date": "2026-05-15",
+      "route": "KL -> Ipoh",
+      "stops_made": ["Starbucks Ipoh"],
+      "energy_consumed_kwh": 35.5
+    },
+    {
+      "date": "2026-05-20",
+      "route": "Ipoh -> Penang",
+      "stops_made": [],
+      "energy_consumed_kwh": 22.0
+    }
+  ]
+}
