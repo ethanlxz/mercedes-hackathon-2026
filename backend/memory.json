@@ -1,7 +1,7 @@
 {
   "profile": {
     "name": "Ethan",
-    "wallet_balance": 150.0,
+    "wallet_balance": 100.0,
     "preferences": {
       "cabin_temp_c": 21.0,
       "favorite_music_genre": "Lo-Fi Beats"
@@ -31,7 +31,9 @@
     {
       "date": "2026-05-15",
       "route": "KL -> Ipoh",
-      "stops_made": ["Starbucks Ipoh"],
+      "stops_made": [
+        "Starbucks Ipoh"
+      ],
       "energy_consumed_kwh": 35.5
     },
     {

@@ -7,6 +7,15 @@ All environment variables, file paths, and tunable settings live here.
 
 import os
 
+from dotenv import load_dotenv
+
+# ---------------------------------------------------------------------------
+# Load .env from project root (one level above backend/)
+# ---------------------------------------------------------------------------
+
+_PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+load_dotenv(os.path.join(_PROJECT_ROOT, ".env"))
+
 # ---------------------------------------------------------------------------
 # Paths
 # ---------------------------------------------------------------------------
@@ -25,10 +34,17 @@ FRONTEND_DIR: str = os.path.join(os.path.dirname(BASE_DIR), "frontend")
 # ---------------------------------------------------------------------------
 
 APP_TITLE: str = "Mercedes Mobility Assistant API"
-APP_VERSION: str = "1.0.0"
+APP_VERSION: str = "2.0.0"
 
 # ---------------------------------------------------------------------------
 # CORS
 # ---------------------------------------------------------------------------
 
 CORS_ORIGINS: list = ["*"]
+
+# ---------------------------------------------------------------------------
+# Gemini / LangGraph
+# ---------------------------------------------------------------------------
+
+GEMINI_API_KEY: str = os.getenv("GEMINI_API_KEY", "")
+GEMINI_MODEL: str = os.getenv("GEMINI_MODEL", "gemini-2.0-flash")

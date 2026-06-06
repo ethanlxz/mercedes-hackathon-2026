@@ -16,7 +16,7 @@ Endpoints:
 from fastapi import APIRouter
 from fastapi.responses import FileResponse, HTMLResponse
 
-from config.settings import FRONTEND_DIR
+from backend.config.settings import FRONTEND_DIR
 import os
 
 router = APIRouter(tags=["Frontend"])

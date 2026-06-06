@@ -10,7 +10,7 @@ Endpoints:
 
 from fastapi import APIRouter
 
-from models.schemas import SimulationState
+from backend.models.schemas import SimulationState
 
 router = APIRouter(
     prefix="/simulation",

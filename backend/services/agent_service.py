@@ -5,14 +5,24 @@ Core business logic for the MBUX AI agent.
 Analyses vehicle state and optional voice/text commands to produce
 proactive recommendations and a chat response.
 
+When the Gemini API key is configured, routes through the LangGraph agent.
+Otherwise, falls back to the built-in rule engine so the app always works.
+
 Completely decoupled from FastAPI — no Request/Response objects here,
 making this layer independently testable.
 """
 
+import json
+import logging
 from typing import Any, Dict, List, Optional, Tuple
 
-from models.schemas import SimulationState
-from services.memory_service import load_memory
+from langchain_core.messages import HumanMessage, SystemMessage
+
+from backend.config.settings import GEMINI_API_KEY
+from backend.models.schemas import SimulationState
+from backend.services.memory_service import load_memory
+
+logger = logging.getLogger("mercedes-assistant")
 
 
 # ---------------------------------------------------------------------------
@@ -29,13 +39,127 @@ def run_agent_analysis(
     Returns:
         (chat_response, recommendations)  – both ready for JSON serialisation.
     """
-    recommendations: List[Dict[str, Any]] = []
-    chat_response: str = ""
     memory = load_memory()
 
-    # ------------------------------------------------------------------
+    # --- Try LangGraph + Gemini first --------------------------------
+    if GEMINI_API_KEY and GEMINI_API_KEY != "your-gemini-api-key-here":
+        try:
+            return _run_langgraph(state, command, memory)
+        except Exception as exc:
+            logger.warning(
+                "LangGraph agent failed — falling back to rule engine: %s",
+                exc,
+                exc_info=True,
+            )
+
+    # --- Fallback: deterministic rule engine ---------------------------
+    return _rule_based_fallback(state, command, memory)
+
+
+# ---------------------------------------------------------------------------
+# LangGraph execution path
+# ---------------------------------------------------------------------------
+
+def _run_langgraph(
+    state: SimulationState,
+    command: Optional[str],
+    memory: Dict[str, Any],
+) -> Tuple[str, List[Dict[str, Any]]]:
+    """Invoke the compiled LangGraph and return (chat_response, recommendations)."""
+    from backend.services.langgraph_agent import SYSTEM_PROMPT, get_graph
+
+    graph = get_graph()
+
+    # Build the user message with full context for Gemini
+    state_dict = state.model_dump()
+
+    # Prepare frequent stops as a compact string for the tools
+    frequent_trips = memory.get("frequent_trips", [])
+    matching_stops: List[Dict[str, Any]] = []
+    for trip in frequent_trips:
+        if (
+            trip.get("destination", "").lower() == state.destination.lower()
+            or trip.get("origin", "").lower() == state.origin.lower()
+        ):
+            matching_stops.extend(trip.get("stops", []))
+
+    profile = memory.get("profile", {})
+    preferences = profile.get("preferences", {})
+    trip_history = memory.get("trip_history", [])
+
+    user_content_parts = [
+        "=== CURRENT VEHICLE STATE ===",
+        json.dumps(state_dict, indent=2),
+        "",
+        "=== DRIVER PROFILE ===",
+        f"Name: {profile.get('name', 'Driver')}",
+        f"Wallet Balance: RM {profile.get('wallet_balance', 0):.2f}",
+        f"Preferred Cabin Temp: {preferences.get('cabin_temp_c', 22)}°C",
+        f"Favourite Music: {preferences.get('favorite_music_genre', 'N/A')}",
+        "",
+        "=== FREQUENT STOPS (from long-term memory) ===",
+        json.dumps(matching_stops, indent=2) if matching_stops else "No matching stops in memory.",
+        "",
+        "=== TRIP HISTORY ===",
+        json.dumps(trip_history[-5:], indent=2) if trip_history else "No trip history yet.",
+    ]
+
+    if command:
+        user_content_parts.extend([
+            "",
+            "=== DRIVER COMMAND ===",
+            command,
+        ])
+    else:
+        user_content_parts.extend([
+            "",
+            "=== TASK ===",
+            "No explicit command.  Run a proactive safety analysis (check fatigue, "
+            "battery, cabin comfort) and report any issues.",
+        ])
+
+    user_message = "\n".join(user_content_parts)
+
+    # Invoke graph
+    initial_state = {
+        "messages": [
+            SystemMessage(content=SYSTEM_PROMPT),
+            HumanMessage(content=user_message),
+        ],
+        "simulation_state": state_dict,
+        "memory": memory,
+        "recommendations": [],
+        "chat_response": "",
+    }
+
+    result = graph.invoke(initial_state)
+
+    chat_response = result.get("chat_response", "")
+    recommendations = result.get("recommendations", [])
+
+    if not chat_response:
+        chat_response = "MBUX analysis complete.  All systems nominal."
+
+    logger.info(
+        "LangGraph agent returned %d recommendation(s).", len(recommendations)
+    )
+    return chat_response, recommendations
+
+
+# ---------------------------------------------------------------------------
+# Rule-based fallback (original logic preserved)
+# ---------------------------------------------------------------------------
+
+def _rule_based_fallback(
+    state: SimulationState,
+    command: Optional[str],
+    memory: Dict[str, Any],
+) -> Tuple[str, List[Dict[str, Any]]]:
+    """Deterministic rule engine — used when Gemini is unavailable."""
+    recommendations: List[Dict[str, Any]] = []
+    chat_response: str = ""
+
     # 1. Proactive Safety Checks (Attention Assist)
-    # ------------------------------------------------------------------
     if state.fatigue_level == "High":
         recommendations.append({
             "type": "rest_stop",
@@ -57,9 +181,7 @@ def run_agent_analysis(
             "confidence": 0.85,
         })
 
-    # ------------------------------------------------------------------
-    # 2. Battery State of Charge (SoC) Warnings
-    # ------------------------------------------------------------------
+    # 2. Battery SoC Warnings
     if state.battery_soc < 20.0:
         recommendations.append({
             "type": "charging",
@@ -81,9 +203,7 @@ def run_agent_analysis(
             "confidence": 0.78,
         })
 
-    # ------------------------------------------------------------------
-    # 3. Cabin Environment & Climate Checks
-    # ------------------------------------------------------------------
+    # 3. Cabin Environment
     if state.cabin_temp_c > 24.5:
         recommendations.append({
             "type": "climate",
@@ -95,17 +215,13 @@ def run_agent_analysis(
             "confidence": 0.70,
         })
 
-    # ------------------------------------------------------------------
-    # 4. Command Parsing (Mimicking NLP Assistant)
-    # ------------------------------------------------------------------
+    # 4. Command Parsing
     if command:
         chat_response, recommendations = _parse_command(
             command, state, memory, recommendations
         )
 
-    # ------------------------------------------------------------------
-    # 5. Post-process: sort by confidence, de-duplicate by (type, location)
-    # ------------------------------------------------------------------
+    # 5. Post-process
     recommendations = _deduplicate(
         sorted(recommendations, key=lambda x: x["confidence"], reverse=True)
     )
@@ -117,7 +233,7 @@ def run_agent_analysis(
 
 
 # ---------------------------------------------------------------------------
-# Private helpers
+# Private helpers (rule-based command parser)
 # ---------------------------------------------------------------------------
 
 def _parse_command(
@@ -214,7 +330,7 @@ def _parse_command(
 
     # Scenario C: Battery / charge / range query
     elif "battery" in cmd_lower or "charge" in cmd_lower or "range" in cmd_lower:
-        est_range = state.battery_soc * 4.0  # 4 km per 1 % SoC
+        est_range = state.battery_soc * 4.0
         chat_response = (
             f"Battery State of Charge is {state.battery_soc:.0f}%. "
             f"Estimated remaining range: {est_range:.0f} km."
@@ -255,6 +371,27 @@ def _parse_command(
             "reason": f"Enhance drive ambiance with your favorite genre: {fav_genre}.",
             "confidence": 0.90,
         })
+
+    # Scenario F: Save/Remember stops
+    elif "remember" in cmd_lower or "favorite" in cmd_lower:
+        from backend.services.memory_service import add_frequent_stop
+        origin = state.origin or "Kuala Lumpur"
+        destination = state.destination or "Penang"
+        location = "Cafe Vista"
+        stop_type = "rest_stop"
+        reason = "Driver favorite location"
+
+        if "cafe" in cmd_lower or "starbucks" in cmd_lower:
+            location = "Cafe Vista"
+            stop_type = "rest_stop"
+            reason = "Frequent coffee stop"
+        elif "charger" in cmd_lower or "charging" in cmd_lower:
+            location = "EV Charging Hub"
+            stop_type = "charging"
+            reason = "High-speed charging point"
+
+        add_frequent_stop(origin, destination, location, stop_type, reason)
+        chat_response = f"Saved '{location}' ({stop_type}) as a favorite stop for your {origin} to {destination} route."
 
     # Fallback
     else:

@@ -16,6 +16,14 @@
   <!-- FontAwesome for icons -->
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
   
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      corePlugins: { preflight: false }
+    }
+  </script>
+
   <!-- Local Style -->
   <link rel="stylesheet" href="style.css">
 </head>
@@ -103,6 +111,10 @@
               <span>Est. Range: <strong id="range-val">400 km</strong></span>
               <span class="warning-text" id="battery-warning" style="display: none;"><i class="fa-solid fa-circle-exclamation"></i> Low Charge</span>
             </div>
+            <div class="speed-control" style="margin-top: 8px;">
+              <label for="battery-slider" style="font-size: 11px; color: var(--text-secondary);">Set Battery Level (%):</label>
+              <input type="range" id="battery-slider" min="0" max="100" value="100" step="1">
+            </div>
           </div>
           
           <!-- ATTENTION ASSIST (FATIGUE) -->
@@ -183,10 +195,34 @@
               <div class="chat-text">Welcome, Ethan. I am monitoring your drive metrics. Where would you like to go today? You can say <strong>"Plan my trip from KL to Penang"</strong>.</div>
             </div>
           </div>
-          <form id="command-form" class="command-form" onsubmit="handleCommandSubmit(event)">
-            <i class="fa-solid fa-microphone mic-icon" title="Voice assistant active"></i>
-            <input type="text" id="command-input" placeholder="Ask MBUX... (e.g. 'Plan my trip from KL to Penang')" autocomplete="off">
-            <button type="submit" class="btn-send"><i class="fa-solid fa-paper-plane"></i></button>
+          <form id="route-form" class="flex items-stretch gap-3 bg-[#0d1219]/90 backdrop-blur-xl border-2 border-white/10 rounded-2xl p-3 shadow-[0_8px_32px_0_rgba(0,0,0,0.6)] transition-all duration-300 focus-within:border-[#00ffd2] focus-within:shadow-[0_8px_32px_0_rgba(0,255,210,0.15),0_0_15px_rgba(0,255,210,0.35)]" onsubmit="handleRouteSubmit(event)">
+            <div class="flex flex-col gap-2 flex-1">
+              <div class="flex items-center gap-3 bg-black/30 rounded-lg px-3 py-2 border border-white/5 transition-colors focus-within:border-[#00ffd2] hover:bg-black/40">
+                <i class="fa-solid fa-circle-dot text-[#00ffd2] w-4 text-center"></i>
+                <select id="route-from" class="flex-1 bg-transparent text-white text-sm outline-none cursor-pointer appearance-none">
+                  <option value="KL" class="bg-[#0d1118] text-white">Kuala Lumpur</option>
+                  <option value="Rawang" class="bg-[#0d1118] text-white">Rawang</option>
+                  <option value="TanjungMalim" class="bg-[#0d1118] text-white">Tanjung Malim</option>
+                  <option value="Tapah" class="bg-[#0d1118] text-white">Tapah</option>
+                  <option value="Ipoh" class="bg-[#0d1118] text-white">Ipoh</option>
+                  <option value="Taiping" class="bg-[#0d1118] text-white">Taiping</option>
+                  <option value="Penang" class="bg-[#0d1118] text-white">Penang</option>
+                </select>
+              </div>
+              <div class="flex items-center gap-3 bg-black/30 rounded-lg px-3 py-2 border border-white/5 transition-colors focus-within:border-[#bf5af2] hover:bg-black/40">
+                <i class="fa-solid fa-location-dot text-[#bf5af2] w-4 text-center"></i>
+                <select id="route-to" class="flex-1 bg-transparent text-white text-sm outline-none cursor-pointer appearance-none">
+                  <option value="KL" class="bg-[#0d1118] text-white">Kuala Lumpur</option>
+                  <option value="Rawang" class="bg-[#0d1118] text-white">Rawang</option>
+                  <option value="TanjungMalim" class="bg-[#0d1118] text-white">Tanjung Malim</option>
+                  <option value="Tapah" class="bg-[#0d1118] text-white">Tapah</option>
+                  <option value="Ipoh" class="bg-[#0d1118] text-white">Ipoh</option>
+                  <option value="Taiping" class="bg-[#0d1118] text-white">Taiping</option>
+                  <option value="Penang" selected class="bg-[#0d1118] text-white">Penang</option>
+                </select>
+              </div>
+            </div>
+            <button type="submit" class="bg-gradient-to-br from-[#0a84ff] to-[#0056b3] text-white font-bold px-5 rounded-xl flex items-center justify-center transition-all hover:-translate-y-[1px] hover:shadow-[0_4px_12px_rgba(10,132,255,0.4)]"><i class="fa-solid fa-route mr-2"></i> Route</button>
           </form>
         </div>
         
@@ -219,6 +255,21 @@
             </div>
           </div>
 
+          <!-- DRIVER LONG-TERM MEMORY CARD -->
+          <div class="driver-memory-card">
+            <div class="memory-header-row">
+              <h3><i class="fa-solid fa-brain"></i> Driver Memory & Favorites</h3>
+              <button class="btn-add-memory" onclick="openAddMemoryModal()" title="Remember a location">
+                <i class="fa-solid fa-circle-plus"></i>
+              </button>
+            </div>
+            <div class="memory-list" id="memory-stops-list">
+              <div class="no-recs" style="padding: 10px 0;">
+                <p style="font-size: 11px; color: var(--text-secondary);">No favorite locations saved.</p>
+              </div>
+            </div>
+          </div>
+
           <!-- MOBILITY WALLET TRANS ACTIONS LOG -->
           <div class="wallet-transactions-card">
             <h3><i class="fa-solid fa-clock-rotate-left"></i> Transaction Feed</h3>
@@ -236,6 +287,50 @@
     </main>
   </div>
   
+  <!-- Add Memory Modal -->
+  <div id="add-memory-modal" class="modal-overlay" style="display: none;">
+    <div class="modal-content glass-panel">
+      <div class="modal-header">
+        <h3>Remember Favorite Location</h3>
+        <button class="btn-close-modal" onclick="closeAddMemoryModal()">&times;</button>
+      </div>
+      <form id="add-memory-form" onsubmit="handleAddMemorySubmit(event)">
+        <div class="form-group">
+          <label for="mem-route-from">Route Origin:</label>
+          <select id="mem-route-from">
+            <option value="Kuala Lumpur">Kuala Lumpur</option>
+            <option value="Ipoh">Ipoh</option>
+            <option value="Penang">Penang</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label for="mem-route-to">Route Destination:</label>
+          <select id="mem-route-to">
+            <option value="Penang">Penang</option>
+            <option value="Kuala Lumpur">Kuala Lumpur</option>
+            <option value="Ipoh">Ipoh</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label for="mem-location">Location Name:</label>
+          <input type="text" id="mem-location" placeholder="e.g. Cafe Vista, Shell Charger" required>
+        </div>
+        <div class="form-group">
+          <label for="mem-type">Type:</label>
+          <select id="mem-type">
+            <option value="rest_stop">Rest Stop / Cafe</option>
+            <option value="charging">EV Charging Station</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label for="mem-reason">Reason / Memory Context:</label>
+          <input type="text" id="mem-reason" placeholder="e.g. Favorite cozy coffee stop" required>
+        </div>
+        <button type="submit" class="btn-primary">Save to Memory</button>
+      </form>
+    </div>
+  </div>
+
   <!-- Leaflet Map JS -->
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
   

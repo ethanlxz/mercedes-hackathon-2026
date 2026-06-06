@@ -7,9 +7,10 @@ Isolates file I/O from route handlers and business logic.
 
 import json
 import logging
-from typing import Any, Dict
+from datetime import datetime
+from typing import Any, Dict, List, Optional
 
-from config.settings import MEMORY_FILE
+from backend.config.settings import MEMORY_FILE
 
 logger = logging.getLogger("mercedes-assistant")
 
@@ -80,3 +81,107 @@ def save_memory(data: Dict[str, Any]) -> None:
             json.dump(data, f, indent=2)
     except Exception as e:
         logger.error(f"Error saving memory: {e}")
+
+
+def append_trip_to_history(
+    route: str,
+    stops_made: List[str],
+    energy_consumed_kwh: float,
+) -> None:
+    """
+    Append a completed trip record to the persistent trip_history array.
+
+    Args:
+        route: Human-readable route description (e.g. "KL -> Penang").
+        stops_made: List of stop location names visited.
+        energy_consumed_kwh: Total energy consumed in kWh.
+    """
+    memory = load_memory()
+    history = memory.setdefault("trip_history", [])
+    history.append({
+        "date": datetime.now().strftime("%Y-%m-%d"),
+        "route": route,
+        "stops_made": stops_made,
+        "energy_consumed_kwh": round(energy_consumed_kwh, 1),
+    })
+    save_memory(memory)
+    logger.info("Trip recorded in memory: %s", route)
+
+
+def update_preferences(
+    cabin_temp_c: Optional[float] = None,
+    favorite_music_genre: Optional[str] = None,
+) -> None:
+    """
+    Update driver preferences in the persistent memory file.
+
+    Only the provided (non-None) fields are overwritten; the rest are kept.
+    """
+    memory = load_memory()
+    prefs = memory.setdefault("profile", {}).setdefault("preferences", {})
+
+    if cabin_temp_c is not None:
+        prefs["cabin_temp_c"] = cabin_temp_c
+    if favorite_music_genre is not None:
+        prefs["favorite_music_genre"] = favorite_music_genre
+
+    save_memory(memory)
+    logger.info("Driver preferences updated in memory.")
+
+
+def add_frequent_stop(
+    origin: str,
+    destination: str,
+    location: str,
+    stop_type: str,
+    reason: str,
+) -> Dict[str, Any]:
+    """
+    Add a frequent stop/location to persistent memory.
+    """
+    memory = load_memory()
+    trips = memory.setdefault("frequent_trips", [])
+    
+    # Try to find a matching trip
+    matching_trip = None
+    for trip in trips:
+        if (
+            trip.get("origin", "").strip().lower() == origin.strip().lower()
+            and trip.get("destination", "").strip().lower() == destination.strip().lower()
+        ):
+            matching_trip = trip
+            break
+            
+    if not matching_trip:
+        matching_trip = {
+            "origin": origin,
+            "destination": destination,
+            "stops": []
+        }
+        trips.append(matching_trip)
+        
+    stops = matching_trip.setdefault("stops", [])
+    
+    # Check if stop already exists
+    existing_stop = None
+    for s in stops:
+        if s.get("location", "").strip().lower() == location.strip().lower():
+            existing_stop = s
+            break
+            
+    new_stop = {
+        "location": location,
+        "type": stop_type,
+        "reason": reason,
+        "confidence": 0.90
+    }
+    
+    if existing_stop:
+        existing_stop.update(new_stop)
+    else:
+        stops.append(new_stop)
+        
+    save_memory(memory)
+    logger.info(f"Saved frequent stop '{location}' on route '{origin} -> {destination}' to memory.")
+    return new_stop
+

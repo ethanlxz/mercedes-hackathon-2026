@@ -17,8 +17,8 @@ import logging
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from config.settings import APP_TITLE, APP_VERSION, CORS_ORIGINS
-from routers import agent, frontend, simulation, wallet
+from backend.config.settings import APP_TITLE, APP_VERSION, CORS_ORIGINS
+from backend.routers import agent, frontend, simulation, wallet
 
 # ---------------------------------------------------------------------------
 # Logging

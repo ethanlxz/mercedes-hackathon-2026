@@ -11,8 +11,8 @@ Endpoints:
 
 from fastapi import APIRouter, HTTPException
 
-from models.schemas import WalletChargeRequest, WalletTopUpRequest
-from services.memory_service import load_memory, save_memory
+from backend.models.schemas import WalletChargeRequest, WalletTopUpRequest
+from backend.services.memory_service import load_memory, save_memory
 
 router = APIRouter(
     prefix="/wallet",

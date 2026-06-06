@@ -54,3 +54,14 @@ class WalletChargeRequest(BaseModel):
 
     amount: float
     reason: str
+
+
+class FrequentStopRequest(BaseModel):
+    """Payload for adding a frequent stop/location to memory."""
+
+    origin: str
+    destination: str
+    location: str
+    type: str
+    reason: str
+

@@ -77,7 +77,22 @@ document.addEventListener("DOMContentLoaded", () => {
     updateSpeedRadialGauge();
   });
   
-  // Quick initial API sync
+  // Set up battery slider input event
+  document.getElementById("battery-slider").addEventListener("input", (e) => {
+    batteryVal = parseInt(e.target.value);
+    updateUI();
+  });
+  
+  document.getElementById("battery-slider").addEventListener("change", (e) => {
+    syncWithBackend();
+    // Intentionally not calling `queryAgent()` here to avoid extra API usage
+  });
+
+  // Load favorite memory stops
+  loadMemoryStops();
+
+  // Quick initial API sync and agent check
+  // Only sync state on load; do not query the agent until simulation start
   syncWithBackend();
 });
 
@@ -193,6 +208,9 @@ function toggleSimulation() {
     
     addTransactionLog("System", "Drive simulation started. Route: KL to Penang.");
     
+    // Call agent query once at start of simulation to get initial assessment
+    queryAgent();
+
     simulationInterval = setInterval(simulationTick, 1000);
   }
 }
@@ -281,6 +299,7 @@ function onFatigueChange(val) {
   
   updateUI();
   syncWithBackend();
+  // Do not call agent on manual fatigue changes to avoid extra API usage
   addTransactionLog("System", `Fatigue state manually simulated as: ${val}.`);
 }
 
@@ -288,6 +307,7 @@ function adjustClimate(diff) {
   cabinTemp = parseFloat((cabinTemp + diff).toFixed(1));
   document.getElementById("climate-temp").innerText = `${cabinTemp.toFixed(1)}°C`;
   syncWithBackend();
+  // Do not call agent when adjusting climate from UI
 }
 
 // -------------------------------------------------------------
@@ -302,6 +322,12 @@ function updateUI() {
   
   const rangeVal = Math.round(batteryVal * 4); // 400km base range
   document.getElementById("range-val").innerText = `${rangeVal} km`;
+  
+  // Sync the battery slider value back to the UI
+  const batterySlider = document.getElementById("battery-slider");
+  if (batterySlider) {
+    batterySlider.value = Math.round(batteryVal);
+  }
 
   const batContainer = document.getElementById("battery-status-container");
   const batWarning = document.getElementById("battery-warning");
@@ -377,29 +403,52 @@ async function syncWithBackend() {
   const currentState = compileCurrentState();
   
   try {
-    // 1. Sync simulation state in backend
+    // 1. Sync simulation state in backend (telemetry upload)
     await fetch(`${BACKEND_URL}/simulation/state`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(currentState)
     });
+  } catch (error) {
+    console.warn("Backend server not responding during telemetry sync.", error);
+  }
+}
 
-    // 2. Request proactive AI recommendations
+async function queryAgent(command = null) {
+  const currentState = compileCurrentState();
+  const payload = { state: currentState };
+  if (command) {
+    payload.command = command;
+  }
+  
+  try {
     const response = await fetch(`${BACKEND_URL}/agent/analyze`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ state: currentState })
+      body: JSON.stringify(payload)
     });
     
     if (response.ok) {
       const data = await response.json();
       renderRecommendations(data.recommendations);
       renderJsonPayload(data);
+      if (command) {
+        appendChatBubble("MBUX Assistant", data.chat_response);
+        handleAPICommandEffects(command, data);
+      } else {
+        // If proactive check found alerts, post to chat so driver is warned
+        if (data.chat_response && data.chat_response.trim()) {
+          appendChatBubble("MBUX Assistant", data.chat_response);
+        }
+      }
     }
   } catch (error) {
-    console.warn("Backend server not responding. Switched to dynamic rule-based simulation engine.", error);
-    // Offline / Mock recommendations fallback if fastapi is down
-    generateMockOfflineRecommendations(currentState);
+    console.warn("Backend agent not responding. Falling back to offline engine.", error);
+    if (command) {
+      handleOfflineCommandFallback(command, currentState);
+    } else {
+      generateMockOfflineRecommendations(currentState);
+    }
   }
 }
 
@@ -470,42 +519,29 @@ async function chargeWallet(amount, reason) {
 }
 
 // -------------------------------------------------------------
-// Handle Command Line & Chat
+// Handle Route Planning
 // -------------------------------------------------------------
-async function handleCommandSubmit(event) {
+async function handleRouteSubmit(event) {
   event.preventDefault();
-  const inputEl = document.getElementById("command-input");
-  const command = inputEl.value.trim();
-  if (!command) return;
+  const fromSelect = document.getElementById("route-from");
+  const toSelect = document.getElementById("route-to");
+  
+  const fromVal = fromSelect.value;
+  const toVal = toSelect.value;
+  
+  const fromName = WAYPOINTS[fromVal]?.name || fromVal;
+  const toName = WAYPOINTS[toVal]?.name || toVal;
+
+  const command = `Plan my trip from ${fromName} to ${toName}`;
 
   // Add User bubble to layout
-  appendChatBubble("User", command);
-  inputEl.value = "";
+  appendChatBubble("User", `Plan my trip from ${fromName} to ${toName}`);
 
-  const currentState = compileCurrentState();
-
-  try {
-    const response = await fetch(`${BACKEND_URL}/agent/analyze`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ state: currentState, command: command })
-    });
-
-    if (response.ok) {
-      const data = await response.json();
-      appendChatBubble("MBUX Assistant", data.chat_response);
-      renderRecommendations(data.recommendations);
-      renderJsonPayload(data);
-
-      // Perform actions based on text response/directives
-      handleAPICommandEffects(command, data);
-    }
-  } catch (err) {
-    console.error("Failed to query backend agent.", err);
-    // Offline rule-based prompt response
-    handleOfflineCommandFallback(command, currentState);
-  }
+  // Do not call agent here to avoid extra API usage. Start simulation; the
+  // agent will run once at simulation start via `toggleSimulation()`.
+  if (!isDriving) toggleSimulation();
 }
+
 
 function handleAPICommandEffects(command, apiData) {
   const cmd = command.toLowerCase();
@@ -794,3 +830,92 @@ function handleOfflineCommandFallback(command, state) {
   };
   renderJsonPayload(payload);
 }
+
+async function loadMemoryStops() {
+  try {
+    const res = await fetch(`${BACKEND_URL}/agent/memory`);
+    if (res.ok) {
+      const data = await res.json();
+      const trips = data.frequent_trips || [];
+      const listEl = document.getElementById("memory-stops-list");
+      listEl.innerHTML = "";
+      
+      let totalStops = 0;
+      trips.forEach(trip => {
+        const origin = trip.origin;
+        const destination = trip.destination;
+        const stops = trip.stops || [];
+        
+        stops.forEach(stop => {
+          totalStops++;
+          const item = document.createElement("div");
+          item.className = `memory-item ${stop.type}`;
+          item.innerHTML = `
+            <div class="memory-item-top">
+              <span class="memory-item-name">${stop.location}</span>
+              <span class="memory-item-route">${origin} → ${destination}</span>
+            </div>
+            <div class="memory-item-desc">${stop.reason} (${stop.type.replace('_', ' ')})</div>
+          `;
+          listEl.appendChild(item);
+        });
+      });
+      
+      if (totalStops === 0) {
+        listEl.innerHTML = `
+          <div class="no-recs" style="padding: 10px 0;">
+            <p style="font-size: 11px; color: var(--text-secondary);">No favorite locations saved.</p>
+          </div>
+        `;
+      }
+    }
+  } catch (err) {
+    console.warn("Failed to load memory stops from backend.", err);
+  }
+}
+
+function openAddMemoryModal() {
+  document.getElementById("add-memory-modal").style.display = "flex";
+}
+
+function closeAddMemoryModal() {
+  document.getElementById("add-memory-modal").style.display = "none";
+}
+
+async function handleAddMemorySubmit(event) {
+  event.preventDefault();
+  const origin = document.getElementById("mem-route-from").value;
+  const destination = document.getElementById("mem-route-to").value;
+  const location = document.getElementById("mem-location").value;
+  const type = document.getElementById("mem-type").value;
+  const reason = document.getElementById("mem-reason").value;
+  
+  try {
+    const res = await fetch(`${BACKEND_URL}/agent/memory/frequent_stop`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ origin, destination, location, type, reason })
+    });
+    
+    if (res.ok) {
+      const data = await res.json();
+      addTransactionLog("System", `Remembered favorite location: ${location}`);
+      appendChatBubble("MBUX Assistant", `I have saved '${location}' to your memory for trips between ${origin} and ${destination}. I will suggest it when planning routes.`);
+      
+      // Close modal and reset form
+      closeAddMemoryModal();
+      document.getElementById("add-memory-form").reset();
+      
+      // Reload lists
+      await loadMemoryStops();
+      
+      // Do not request updated agent recommendations here to avoid extra API calls.
+    } else {
+      alert("Failed to save favorite location.");
+    }
+  } catch (err) {
+    console.error("Error saving favorite location", err);
+    alert("Error communicating with backend.");
+  }
+}
+
