@@ -17,6 +17,9 @@ DEFAULT_MEMORY: dict[str, Any] = {
         "fastestRoute": False,
         "timeWindows": {},
     },
+    "settings": {
+        "currentLocation": "",
+    },
 }
 
 
@@ -70,6 +73,20 @@ def set_location_tag(tag: str, address: str) -> dict[str, str]:
     memory["locationTags"][normalized_tag] = address.strip()
     save_memory(memory)
     return get_location_tags()
+
+
+def get_user_settings() -> dict[str, str]:
+    settings = load_memory()["settings"]
+    return {
+        "currentLocation": str(settings.get("currentLocation") or ""),
+    }
+
+
+def set_current_location(address: str) -> dict[str, str]:
+    memory = load_memory()
+    memory["settings"]["currentLocation"] = address.strip()
+    save_memory(memory)
+    return get_user_settings()
 
 
 def get_preferences() -> dict[str, Any]:

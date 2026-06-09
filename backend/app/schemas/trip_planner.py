@@ -2,7 +2,7 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
-from backend.app.schemas.routes import RouteSummary
+from backend.app.schemas.routes import RouteSummary, RouteWaypoint
 
 
 class LocationTagsResponse(BaseModel):
@@ -13,6 +13,14 @@ class LocationTagsResponse(BaseModel):
 class LocationTagRequest(BaseModel):
     tag: Literal["home", "work"]
     address: str = Field(..., min_length=1, max_length=500)
+
+
+class UserSettingsResponse(BaseModel):
+    currentLocation: str = ""
+
+
+class CurrentLocationRequest(BaseModel):
+    address: str = Field(default="", max_length=500)
 
 
 class TripPreferences(BaseModel):
@@ -29,10 +37,8 @@ class NormalizedTripPlan(BaseModel):
     preferences: TripPreferences = Field(default_factory=TripPreferences)
 
 
-class TripWaypoint(BaseModel):
+class TripWaypoint(RouteWaypoint):
     role: Literal["origin", "stop", "destination"]
-    label: str
-    address: str
 
 
 class TripPlannerRequest(BaseModel):

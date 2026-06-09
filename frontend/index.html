@@ -9,37 +9,31 @@
   </head>
   <body class="bg-neutral-950 text-white">
     <main class="carplay-shell">
-      <aside class="side-rail">
-        <div>
+      <button id="sidebar-toggle" class="sidebar-toggle" type="button" aria-label="Open sidebar">
+        <span></span>
+        <span></span>
+        <span></span>
+      </button>
+      <div id="sidebar-scrim" class="sidebar-scrim hidden" aria-hidden="true"></div>
+
+      <aside id="side-rail" class="side-rail" aria-hidden="true">
+        <div class="sidebar-header">
           <div id="clock" class="clock">4:02</div>
-          <div class="signal-row" aria-hidden="true">
-            <span></span><span></span><span></span><span></span>
-            <strong>5G</strong>
-          </div>
-          <div class="battery" aria-hidden="true"><span></span></div>
+          <button id="sidebar-close" class="sidebar-close" type="button" aria-label="Close sidebar">Close</button>
         </div>
 
-        <nav class="app-stack" aria-label="CarPlay apps">
-          <button id="planner-app-button" class="app-icon planner-icon" type="button" title="Trip Planner">
-            <span></span><span></span><span></span>
-          </button>
-          <button class="app-icon podcast-icon" type="button" title="Podcasts">
-            <span></span>
-          </button>
-          <button class="app-icon messages-icon" type="button" title="Messages">
-            <span></span>
-            <i></i>
-          </button>
+        <nav class="sidebar-actions" aria-label="Navigation tools">
+          <button id="gps-app-button" class="sidebar-action active" type="button">GPS</button>
+          <button id="planner-app-button" class="sidebar-action" type="button">Trip Planner</button>
+          <button id="edit-tags-button" class="sidebar-action" type="button">Edit Tags</button>
+          <button id="settings-app-button" class="sidebar-action" type="button">Settings</button>
         </nav>
-
-        <button class="dashboard-button" type="button" title="Dashboard">
-          <span></span><span></span>
-        </button>
       </aside>
 
       <section class="map-stage" aria-label="Route map">
         <div id="map" class="map-canvas"></div>
         <div class="map-tint" aria-hidden="true"></div>
+        <div id="pin-hover-card" class="pin-hover-card hidden" aria-hidden="true"></div>
 
         <form id="route-form" class="route-card" autocomplete="off">
           <div id="simple-route-panel">
@@ -49,8 +43,8 @@
               name="origin"
               class="route-input"
               type="text"
-              placeholder="Kuala Lumpur"
-              value="Kuala Lumpur"
+              placeholder="Optional: uses Current Location or Home"
+              value=""
             />
 
             <label class="field-label" for="destination">Destination</label>
@@ -79,31 +73,62 @@
 
             <div class="planner-actions">
               <button id="trip-button" class="go-button" type="button">Plan</button>
-              <button id="add-tags-button" class="secondary-button" type="button">Add Tags</button>
-            </div>
-
-            <div id="tag-panel" class="tag-panel hidden">
-              <label class="field-label" for="tag-select">Tag</label>
-              <select id="tag-select" class="route-input tag-select">
-                <option value="home">Home</option>
-                <option value="work">Work</option>
-              </select>
-
-              <label class="field-label" for="tag-address">Address</label>
-              <input
-                id="tag-address"
-                class="route-input"
-                type="text"
-                placeholder="Shah Alam, Selangor"
-              />
-
-              <button id="save-tag-button" class="secondary-button save-tag-button" type="button">
-                Save Tag
-              </button>
-              <div id="current-tags" class="current-tags"></div>
             </div>
 
             <p id="planner-status" class="status-text planner-status" role="status"></p>
+          </div>
+
+          <div id="tags-panel" class="hidden">
+            <label class="field-label">Edit Tags</label>
+
+            <div class="tag-grid">
+              <div class="tag-box tag-box-home">
+                <div class="tag-box-heading">Home</div>
+                <input
+                  id="home-address"
+                  class="route-input tag-address-input"
+                  type="text"
+                  placeholder="Impian Meridian"
+                />
+                <button id="save-home-button" class="tag-save-button" type="button">Submit</button>
+              </div>
+
+              <div class="tag-box tag-box-work">
+                <div class="tag-box-heading">Work</div>
+                <input
+                  id="work-address"
+                  class="route-input tag-address-input"
+                  type="text"
+                  placeholder="Mont Kiara, Kuala Lumpur"
+                />
+                <button id="save-work-button" class="tag-save-button" type="button">Submit</button>
+              </div>
+            </div>
+
+            <p id="tags-status" class="status-text planner-status" role="status"></p>
+          </div>
+
+          <div id="settings-panel" class="hidden">
+            <label class="field-label">Settings</label>
+
+            <div class="settings-box">
+              <div class="settings-box-heading">Current Location</div>
+              <input
+                id="current-location-input"
+                class="route-input tag-address-input"
+                type="text"
+                placeholder="Impian Meridian"
+              />
+              <button id="save-current-location-button" class="tag-save-button" type="button">
+                Submit
+              </button>
+              <div class="resolved-location">
+                <span>Resolved address</span>
+                <strong id="current-location-display">Not set</strong>
+              </div>
+            </div>
+
+            <p id="settings-status" class="status-text planner-status" role="status"></p>
           </div>
         </form>
 

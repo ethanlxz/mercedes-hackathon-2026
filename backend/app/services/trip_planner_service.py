@@ -12,7 +12,7 @@ from backend.app.schemas.trip_planner import (
     TripPreferences,
     TripWaypoint,
 )
-from backend.app.services.google_places import resolve_nearby_place
+from backend.app.services.google_places import resolve_nearby_place, search_place
 from backend.app.services.google_routes import compute_multi_stop_route
 from backend.app.services.memory_service import get_preferences, update_preferences
 
@@ -29,6 +29,7 @@ class AgentParseResult(BaseModel):
 class PlannerState(TypedDict, total=False):
     instruction: str
     location_tags: dict[str, str]
+    user_settings: dict[str, str]
     stored_preferences: dict[str, Any]
     parsed: AgentParseResult
     normalized_plan: NormalizedTripPlan
@@ -40,6 +41,13 @@ class PlannerState(TypedDict, total=False):
 TAG_ALIASES = {
     "home": {"home", "my home", "house", "my house"},
     "work": {"work", "office", "my office", "workplace", "my workplace"},
+}
+CURRENT_LOCATION_ALIASES = {
+    "current location",
+    "my current location",
+    "here",
+    "from here",
+    "my location",
 }
 NEARBY_WORDS = {"nearby", "nearest", "closest", "near me"}
 NEARBY_TERMS = r"(?:nearby|neaby|nearest|closest|near me)"
@@ -65,11 +73,41 @@ def _resolve_tag_value(value: str, location_tags: dict[str, str]) -> tuple[str, 
     return cleaned, None
 
 
+def _resolve_origin_value(
+    value: str,
+    location_tags: dict[str, str],
+    user_settings: dict[str, str],
+) -> tuple[str, str | None]:
+    cleaned = _clean_text(value)
+    if cleaned.lower() in CURRENT_LOCATION_ALIASES:
+        current_location = str(user_settings.get("currentLocation") or "").strip()
+        if not current_location:
+            return cleaned, "currentLocation"
+        return current_location, None
+
+    return _resolve_tag_value(cleaned, location_tags)
+
+
 def _waypoint_label(address: str, location_tags: dict[str, str]) -> str:
     for tag, saved_address in location_tags.items():
         if saved_address and address.strip().lower() == saved_address.strip().lower():
             return tag.title()
     return address
+
+
+def _default_origin(
+    user_settings: dict[str, str],
+    location_tags: dict[str, str],
+) -> tuple[str, str | None]:
+    current_location = str(user_settings.get("currentLocation") or "").strip()
+    if current_location:
+        return current_location, None
+
+    home = str(location_tags.get("home") or "").strip()
+    if home:
+        return home, None
+
+    return "", "Please set Current Location in Settings or save your Home address first."
 
 
 def _has_nearby_intent(value: str) -> bool:
@@ -126,6 +164,40 @@ def _fallback_nearby_parse(instruction: str) -> AgentParseResult | None:
 
 def _place_query_label(query: str) -> str:
     return re.sub(r"^(?:a|an|the)\s+", "", _clean_text(query), flags=re.IGNORECASE)
+
+
+async def _enrich_waypoint_metadata(
+    waypoints: list[TripWaypoint],
+    google_maps_server_key: str,
+) -> list[TripWaypoint]:
+    enriched: list[TripWaypoint] = []
+    for waypoint in waypoints:
+        try:
+            place = await search_place(
+                text_query=waypoint.address,
+                fallback_label=waypoint.label,
+                api_key=google_maps_server_key,
+            )
+        except HTTPException:
+            place = None
+
+        if not place:
+            enriched.append(waypoint)
+            continue
+
+        should_keep_label = waypoint.label.strip().lower() in {"home", "work"}
+        label = waypoint.label if should_keep_label else place.label
+
+        enriched.append(
+            TripWaypoint(
+                role=waypoint.role,
+                label=label or waypoint.label,
+                address=place.address or waypoint.address,
+                rating=place.rating,
+                googleMapsUri=place.google_maps_uri,
+            )
+        )
+    return enriched
 
 
 async def _resolve_nearby_waypoint(
@@ -218,6 +290,7 @@ def _extract_json_object(text: str) -> dict[str, Any]:
 async def _parse_with_deepseek(
     instruction: str,
     location_tags: dict[str, str],
+    user_settings: dict[str, str],
     stored_preferences: dict[str, Any],
     deepseek_api_key: str,
     deepseek_model: str,
@@ -267,6 +340,9 @@ Saved location tag context:
 - home: {location_tags.get("home") or "(not set)"}
 - work: {location_tags.get("work") or "(not set)"}
 
+Settings context:
+- currentLocation: {user_settings.get("currentLocation") or "(not set)"}
+
 Stored route preferences:
 {stored_preferences}
 
@@ -283,6 +359,7 @@ Instructions:
 - Preserve chronological order for pickups, dropoffs, errands, sightseeing, meals, and time windows.
 - Extract avoidHighways, avoidTolls, fastestRoute, and time windows.
 - If the origin is omitted but the instruction starts from home and home is saved, use home.
+- If the origin is omitted without a home reference, leave origin as an empty string so backend default origin rules can use currentLocation, then home.
 - If the final destination is omitted but the user says return home, use home.
 - If an important location is ambiguous, set clarificationRequired true with one short question.
 
@@ -315,6 +392,7 @@ User instruction:
 async def plan_trip(
     instruction: str,
     location_tags: dict[str, str],
+    user_settings: dict[str, str],
     google_maps_server_key: str,
     deepseek_api_key: str,
     deepseek_model: str,
@@ -332,6 +410,7 @@ async def plan_trip(
         parsed = await _parse_with_deepseek(
             instruction=state["instruction"],
             location_tags=state["location_tags"],
+            user_settings=state["user_settings"],
             stored_preferences=state["stored_preferences"],
             deepseek_api_key=deepseek_api_key,
             deepseek_model=deepseek_model,
@@ -344,8 +423,18 @@ async def plan_trip(
         if parsed.clarificationRequired:
             return {"clarification_message": parsed.clarificationMessage}
 
-        origin, missing_origin = _resolve_tag_value(parsed.origin, state["location_tags"])
+        origin, missing_origin = _resolve_origin_value(
+            parsed.origin,
+            state["location_tags"],
+            state["user_settings"],
+        )
         if missing_origin:
+            if missing_origin == "currentLocation":
+                return {
+                    "clarification_message": (
+                        "Please set Current Location in Settings first."
+                    )
+                }
             return {
                 "clarification_message": (
                     f"Please save your {missing_origin.title()} address with Add Tags first."
@@ -353,11 +442,12 @@ async def plan_trip(
             }
 
         if not origin:
-            return {
-                "clarification_message": (
-                    "Please include a clear start point and final destination."
-                )
-            }
+            origin, default_origin_clarification = _default_origin(
+                user_settings=state["user_settings"],
+                location_tags=state["location_tags"],
+            )
+            if default_origin_clarification:
+                return {"clarification_message": default_origin_clarification}
 
         stops: list[str] = []
         stop_labels: list[str] = []
@@ -445,6 +535,10 @@ async def plan_trip(
                 address=destination,
             )
         )
+        waypoints = await _enrich_waypoint_metadata(
+            waypoints=waypoints,
+            google_maps_server_key=google_maps_server_key,
+        )
 
         return {
             "normalized_plan": plan,
@@ -480,6 +574,7 @@ async def plan_trip(
         {
             "instruction": instruction,
             "location_tags": location_tags,
+            "user_settings": user_settings,
             "stored_preferences": get_preferences(),
         }
     )

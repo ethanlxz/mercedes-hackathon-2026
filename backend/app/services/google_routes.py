@@ -3,8 +3,9 @@ import math
 import httpx
 from fastapi import HTTPException, status
 
-from backend.app.schemas.routes import RouteResponse, RouteSummary
+from backend.app.schemas.routes import RouteResponse, RouteSummary, RouteWaypoint
 from backend.app.schemas.trip_planner import TripPreferences
+from backend.app.services.google_places import search_place
 
 
 ROUTES_URL = "https://routes.googleapis.com/directions/v2:computeRoutes"
@@ -44,6 +45,33 @@ def _google_error_message(payload: dict, fallback: str) -> str:
     if isinstance(error, dict):
         return error.get("message") or fallback
     return fallback
+
+
+async def _route_waypoint(
+    role: str,
+    label: str,
+    address: str,
+    api_key: str,
+) -> RouteWaypoint:
+    try:
+        place = await search_place(
+            text_query=address,
+            fallback_label=label,
+            api_key=api_key,
+        )
+    except HTTPException:
+        place = None
+
+    if not place:
+        return RouteWaypoint(role=role, label=label, address=address)
+
+    return RouteWaypoint(
+        role=role,
+        label=place.label or label,
+        address=place.address or address,
+        rating=place.rating,
+        googleMapsUri=place.google_maps_uri,
+    )
 
 
 async def compute_route(origin: str, destination: str, api_key: str) -> RouteResponse:
@@ -121,6 +149,10 @@ async def compute_route(origin: str, destination: str, api_key: str) -> RouteRes
             durationText=_format_duration(duration),
             distanceText=_format_distance(distance_meters),
         ),
+        waypoints=[
+            await _route_waypoint("origin", origin, origin, api_key),
+            await _route_waypoint("destination", destination, destination, api_key),
+        ],
     )
 
 
