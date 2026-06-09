@@ -1,0 +1,52 @@
+from typing import Literal
+
+from pydantic import BaseModel, Field
+
+from backend.app.schemas.routes import RouteSummary
+
+
+class LocationTagsResponse(BaseModel):
+    home: str = ""
+    work: str = ""
+
+
+class LocationTagRequest(BaseModel):
+    tag: Literal["home", "work"]
+    address: str = Field(..., min_length=1, max_length=500)
+
+
+class TripPreferences(BaseModel):
+    avoidHighways: bool = False
+    avoidTolls: bool = False
+    fastestRoute: bool = False
+    timeWindows: dict[str, str] = Field(default_factory=dict)
+
+
+class NormalizedTripPlan(BaseModel):
+    origin: str
+    stops: list[str] = Field(default_factory=list)
+    destination: str
+    preferences: TripPreferences = Field(default_factory=TripPreferences)
+
+
+class TripWaypoint(BaseModel):
+    role: Literal["origin", "stop", "destination"]
+    label: str
+    address: str
+
+
+class TripPlannerRequest(BaseModel):
+    instruction: str = Field(..., min_length=1, max_length=3000)
+
+
+class TripPlannerResponse(BaseModel):
+    normalizedPlan: NormalizedTripPlan | None = None
+    waypoints: list[TripWaypoint] = Field(default_factory=list)
+    duration: str = ""
+    distanceMeters: int = 0
+    encodedPolyline: str = ""
+    summary: RouteSummary = Field(
+        default_factory=lambda: RouteSummary(durationText="--", distanceText="--")
+    )
+    clarificationRequired: bool = False
+    clarificationMessage: str | None = None

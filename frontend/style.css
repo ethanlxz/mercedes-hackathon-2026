@@ -11,6 +11,15 @@ input {
   font: inherit;
 }
 
+textarea,
+select {
+  font: inherit;
+}
+
+.hidden {
+  display: none !important;
+}
+
 .carplay-shell {
   display: grid;
   grid-template-columns: 136px 1fr;
@@ -105,29 +114,40 @@ input {
   box-shadow: 0 10px 24px rgba(0, 0, 0, 0.22);
 }
 
-.maps-icon {
-  background:
-    radial-gradient(circle at 70% 20%, #fff 0 18%, transparent 19%),
-    linear-gradient(145deg, #ff8fc5 0 28%, #7be274 29% 56%, #fdf079 57% 76%, #fff 77%);
+.planner-icon {
+  display: grid;
+  place-items: center;
+  background: linear-gradient(145deg, #16a34a, #0f6ddb);
 }
 
-.maps-icon span {
-  position: absolute;
-  inset: 30px;
-  border-radius: 50%;
-  background: #147cff;
-  box-shadow: 0 0 0 7px #fff;
+.planner-icon.active {
+  box-shadow:
+    0 0 0 4px rgba(255, 255, 255, 0.25),
+    0 12px 26px rgba(0, 0, 0, 0.3);
 }
 
-.maps-icon span::after {
+.planner-icon span {
   position: absolute;
-  left: 17px;
-  top: 12px;
-  width: 13px;
-  height: 28px;
-  content: "";
-  clip-path: polygon(50% 0, 100% 100%, 50% 72%, 0 100%);
+  width: 54px;
+  height: 9px;
+  border-radius: 999px;
   background: #fff;
+}
+
+.planner-icon span:nth-child(1) {
+  top: 26px;
+  transform: rotate(12deg);
+}
+
+.planner-icon span:nth-child(2) {
+  top: 42px;
+  transform: rotate(-12deg);
+}
+
+.planner-icon span:nth-child(3) {
+  top: 58px;
+  width: 34px;
+  transform: rotate(12deg);
 }
 
 .podcast-icon {
@@ -268,6 +288,14 @@ input {
   font-weight: 700;
 }
 
+.trip-input {
+  min-height: 138px;
+  padding-top: 14px;
+  padding-bottom: 14px;
+  resize: vertical;
+  line-height: 1.35;
+}
+
 .route-input:focus {
   border-color: #2388ff;
   box-shadow: 0 0 0 4px rgba(35, 136, 255, 0.24);
@@ -292,9 +320,58 @@ input {
   box-shadow: 0 12px 24px rgba(22, 133, 255, 0.3);
 }
 
+.planner-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.secondary-button {
+  height: 52px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+  font-size: 18px;
+  font-weight: 800;
+}
+
+.secondary-button:disabled {
+  cursor: wait;
+  opacity: 0.68;
+}
+
 .go-button:disabled {
   cursor: wait;
   opacity: 0.68;
+}
+
+.tag-panel {
+  margin-top: 16px;
+  padding: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.tag-select {
+  appearance: none;
+}
+
+.save-tag-button {
+  width: 100%;
+  margin-top: 14px;
+}
+
+.current-tags {
+  display: grid;
+  gap: 5px;
+  margin-top: 12px;
+  color: rgba(255, 255, 255, 0.68);
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.35;
 }
 
 .status-text {
@@ -307,6 +384,10 @@ input {
 
 .status-text.error {
   color: #ffb6b6;
+}
+
+.planner-status {
+  margin-top: 12px;
 }
 
 .route-label {
@@ -411,6 +492,24 @@ input {
     border-radius: 15px;
   }
 
+  .planner-icon span {
+    width: 39px;
+    height: 7px;
+  }
+
+  .planner-icon span:nth-child(1) {
+    top: 18px;
+  }
+
+  .planner-icon span:nth-child(2) {
+    top: 31px;
+  }
+
+  .planner-icon span:nth-child(3) {
+    top: 44px;
+    width: 26px;
+  }
+
   .dashboard-button {
     width: 62px;
     grid-template-columns: 28px 28px;
@@ -430,8 +529,22 @@ input {
     font-size: 17px;
   }
 
+  .trip-input {
+    min-height: 118px;
+  }
+
   .route-actions {
     grid-template-columns: 76px 1fr;
+  }
+
+  .planner-actions {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+
+  .secondary-button {
+    height: 44px;
+    font-size: 16px;
   }
 
   .route-label {

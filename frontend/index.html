@@ -20,8 +20,8 @@
         </div>
 
         <nav class="app-stack" aria-label="CarPlay apps">
-          <button class="app-icon maps-icon" type="button" title="Maps">
-            <span></span>
+          <button id="planner-app-button" class="app-icon planner-icon" type="button" title="Trip Planner">
+            <span></span><span></span><span></span>
           </button>
           <button class="app-icon podcast-icon" type="button" title="Podcasts">
             <span></span>
@@ -42,29 +42,68 @@
         <div class="map-tint" aria-hidden="true"></div>
 
         <form id="route-form" class="route-card" autocomplete="off">
-          <label class="field-label" for="origin">Origin</label>
-          <input
-            id="origin"
-            name="origin"
-            class="route-input"
-            type="text"
-            placeholder="Kuala Lumpur"
-            value="Kuala Lumpur"
-          />
+          <div id="simple-route-panel">
+            <label class="field-label" for="origin">Origin</label>
+            <input
+              id="origin"
+              name="origin"
+              class="route-input"
+              type="text"
+              placeholder="Kuala Lumpur"
+              value="Kuala Lumpur"
+            />
 
-          <label class="field-label" for="destination">Destination</label>
-          <input
-            id="destination"
-            name="destination"
-            class="route-input"
-            type="text"
-            placeholder="Penang"
-            value="Penang"
-          />
+            <label class="field-label" for="destination">Destination</label>
+            <input
+              id="destination"
+              name="destination"
+              class="route-input"
+              type="text"
+              placeholder="Penang"
+              value="Penang"
+            />
 
-          <div class="route-actions">
-            <button id="route-button" class="go-button" type="submit">Go</button>
-            <p id="status" class="status-text" role="status"></p>
+            <div class="route-actions">
+              <button id="route-button" class="go-button" type="submit">Go</button>
+              <p id="status" class="status-text" role="status"></p>
+            </div>
+          </div>
+
+          <div id="planner-panel" class="hidden">
+            <label class="field-label" for="trip-instruction">Trip Planner</label>
+            <textarea
+              id="trip-instruction"
+              class="route-input trip-input"
+              placeholder="Start at home, pick up my friend in Subang Jaya, grab dinner, then return home avoiding tolls."
+            ></textarea>
+
+            <div class="planner-actions">
+              <button id="trip-button" class="go-button" type="button">Plan</button>
+              <button id="add-tags-button" class="secondary-button" type="button">Add Tags</button>
+            </div>
+
+            <div id="tag-panel" class="tag-panel hidden">
+              <label class="field-label" for="tag-select">Tag</label>
+              <select id="tag-select" class="route-input tag-select">
+                <option value="home">Home</option>
+                <option value="work">Work</option>
+              </select>
+
+              <label class="field-label" for="tag-address">Address</label>
+              <input
+                id="tag-address"
+                class="route-input"
+                type="text"
+                placeholder="Shah Alam, Selangor"
+              />
+
+              <button id="save-tag-button" class="secondary-button save-tag-button" type="button">
+                Save Tag
+              </button>
+              <div id="current-tags" class="current-tags"></div>
+            </div>
+
+            <p id="planner-status" class="status-text planner-status" role="status"></p>
           </div>
         </form>
 
