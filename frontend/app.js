@@ -16,7 +16,6 @@ const elements = {
   distance: document.querySelector("#distance-text"),
   arrival: document.querySelector("#arrival-time"),
   clock: document.querySelector("#clock"),
-  routeLabel: document.querySelector("#route-label"),
 };
 
 function setStatus(message, isError = false) {
@@ -190,8 +189,7 @@ function renderRoute(payload) {
   elements.duration.textContent = payload.summary.durationText;
   elements.distance.textContent = payload.summary.distanceText;
   elements.arrival.textContent = formatArrival(payload.duration);
-  elements.routeLabel.textContent = elements.destination.value.trim();
-  elements.routeLabel.classList.remove("hidden");
+
 }
 
 async function requestRoute(origin, destination) {

@@ -239,31 +239,15 @@ input {
   top: 24px;
   left: 24px;
   width: min(494px, calc(100% - 48px));
-  padding: 28px 32px 30px;
+  padding: 24px 30px 28px;
   border-radius: 24px;
   background: rgba(22, 24, 26, 0.96);
   box-shadow: 0 22px 60px rgba(0, 0, 0, 0.32);
 }
 
-.lane-icons {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  align-items: center;
-  margin-bottom: 12px;
-  color: rgba(255, 255, 255, 0.54);
-  font-size: 88px;
-  font-weight: 900;
-  line-height: 0.7;
-}
-
-.lane-icons .active {
-  color: #fff;
-  transform: rotate(-12deg);
-}
-
 .field-label {
   display: block;
-  margin-top: 14px;
+  margin-top: 12px;
   color: rgba(255, 255, 255, 0.62);
   font-size: 16px;
   font-weight: 700;
@@ -325,48 +309,6 @@ input {
   color: #ffb6b6;
 }
 
-.compass-badge {
-  position: absolute;
-  z-index: 9;
-  top: 24px;
-  right: 24px;
-  display: grid;
-  place-items: center;
-  width: 102px;
-  height: 102px;
-  border-radius: 50%;
-  background: rgba(24, 25, 29, 0.96);
-  color: rgba(255, 255, 255, 0.78);
-  font-size: 44px;
-  font-weight: 800;
-}
-
-.speed-sign {
-  position: absolute;
-  z-index: 9;
-  top: 152px;
-  right: 25px;
-  display: grid;
-  place-items: center;
-  width: 96px;
-  padding: 8px 0 5px;
-  border: 5px solid #333;
-  border-radius: 12px;
-  background: #e9e9e9;
-  color: #2c2c2c;
-  line-height: 0.92;
-}
-
-.speed-sign span {
-  font-size: 23px;
-  font-weight: 900;
-}
-
-.speed-sign strong {
-  font-size: 50px;
-  line-height: 1;
-}
-
 .route-label {
   position: absolute;
   z-index: 8;
@@ -392,41 +334,37 @@ input {
   left: 24px;
   bottom: 24px;
   display: grid;
-  grid-template-columns: repeat(3, minmax(86px, 1fr)) 62px;
-  gap: 28px;
+  grid-template-columns: repeat(3, minmax(92px, 1fr));
+  gap: 14px;
   align-items: center;
-  width: min(494px, calc(100% - 48px));
-  padding: 22px 31px;
-  border-radius: 24px;
+  width: min(430px, calc(100% - 48px));
+  padding: 16px 20px;
+  border-radius: 18px;
   background: rgba(22, 24, 26, 0.96);
+}
+
+.bottom-pill div {
+  min-width: 0;
 }
 
 .bottom-pill strong {
   display: block;
-  font-size: 39px;
-  line-height: 0.85;
+  font-size: 27px;
+  font-weight: 800;
+  line-height: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .bottom-pill span {
   display: block;
-  margin-top: 9px;
-  color: rgba(255, 255, 255, 0.74);
-  font-size: 31px;
-  line-height: 0.95;
-}
-
-.collapse-button {
-  display: grid;
-  place-items: center;
-  width: 62px;
-  height: 62px;
-  border: 0;
-  border-radius: 50%;
-  background: #737373;
-  color: #16181a;
-  font-size: 44px;
-  font-weight: 900;
+  margin-top: 4px;
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 13px;
+  font-weight: 700;
   line-height: 1;
+  text-transform: uppercase;
 }
 
 .gm-style .gm-style-cc,
@@ -483,12 +421,8 @@ input {
     top: 14px;
     left: 14px;
     width: calc(100% - 28px);
-    padding: 18px;
+    padding: 16px;
     border-radius: 18px;
-  }
-
-  .lane-icons {
-    font-size: 52px;
   }
 
   .route-input {
@@ -500,16 +434,6 @@ input {
     grid-template-columns: 76px 1fr;
   }
 
-  .compass-badge {
-    width: 64px;
-    height: 64px;
-    right: 13px;
-    top: auto;
-    bottom: 126px;
-    font-size: 28px;
-  }
-
-  .speed-sign,
   .route-label {
     display: none;
   }
@@ -518,23 +442,17 @@ input {
     left: 14px;
     bottom: 14px;
     width: calc(100% - 28px);
-    grid-template-columns: repeat(3, minmax(55px, 1fr)) 44px;
-    gap: 10px;
-    padding: 16px;
-    border-radius: 18px;
+    grid-template-columns: repeat(3, minmax(55px, 1fr));
+    gap: 8px;
+    padding: 12px;
+    border-radius: 16px;
   }
 
   .bottom-pill strong {
-    font-size: 25px;
+    font-size: 19px;
   }
 
   .bottom-pill span {
-    font-size: 17px;
-  }
-
-  .collapse-button {
-    width: 44px;
-    height: 44px;
-    font-size: 31px;
+    font-size: 10px;
   }
 }
