@@ -24,6 +24,10 @@ class AgentParseResult(BaseModel):
     preferences: TripPreferences = Field(default_factory=TripPreferences)
     clarificationRequired: bool = False
     clarificationMessage: str | None = None
+    choiceRequired: bool = False
+    choiceType: str | None = None
+    choiceQuery: str = ""
+    message: str | None = None
 
 
 class PlannerState(TypedDict, total=False):
@@ -36,6 +40,7 @@ class PlannerState(TypedDict, total=False):
     waypoints: list[TripWaypoint]
     route_response: Any
     clarification_message: str | None
+    choice_response: TripPlannerResponse | None
 
 
 TAG_ALIASES = {
@@ -51,6 +56,26 @@ CURRENT_LOCATION_ALIASES = {
 }
 NEARBY_WORDS = {"nearby", "nearest", "closest", "near me"}
 NEARBY_TERMS = r"(?:nearby|neaby|nearest|closest|near me)"
+VAGUE_FOOD_TERMS = {"breakfast", "lunch", "dinner", "supper", "food", "eat", "hungry"}
+SPECIFIC_FOOD_TERMS = {
+    "mcdonald",
+    "mcdonald's",
+    "burger king",
+    "kfc",
+    "starbucks",
+    "japanese",
+    "chinese",
+    "hotpot",
+    "mamak",
+    "indian",
+    "malay",
+    "western",
+    "italian",
+    "restaurant",
+    "cafe",
+    "coffee",
+}
+LOCATION_PICKER_TERMS = {"mall", "hospital", "clinic"}
 
 
 def _clean_text(value: str) -> str:
@@ -116,6 +141,45 @@ def _has_nearby_intent(value: str) -> bool:
         any(word in normalized for word in {*NEARBY_WORDS, "neaby"})
         or bool(re.search(r"\bnear\s+.+", normalized))
     )
+
+
+def _choice_message(instruction: str) -> str:
+    normalized = _clean_text(instruction).lower()
+    for meal in ("breakfast", "lunch", "dinner", "supper"):
+        if meal in normalized:
+            return f"What would you like for {meal}?"
+    return "What would you like to eat?"
+
+
+def _direct_choice_intent(instruction: str) -> AgentParseResult | None:
+    normalized = _clean_text(instruction).lower()
+    if not normalized:
+        return None
+
+    mentions_specific_food = any(term in normalized for term in SPECIFIC_FOOD_TERMS)
+    mentions_vague_food = any(re.search(rf"\b{re.escape(term)}\b", normalized) for term in VAGUE_FOOD_TERMS)
+    if mentions_vague_food and not mentions_specific_food:
+        return AgentParseResult(
+            choiceRequired=True,
+            choiceType="food",
+            choiceQuery="",
+            message=_choice_message(instruction),
+        )
+
+    nearby_category_match = re.search(
+        r"\b(?:nearest|nearby|closest)\s+(?P<category>mall|hospital|clinic)s?\b",
+        normalized,
+    )
+    if nearby_category_match:
+        category = nearby_category_match.group("category")
+        return AgentParseResult(
+            choiceRequired=True,
+            choiceType="location",
+            choiceQuery=category,
+            message=f"Choose a nearby {category}.",
+        )
+
+    return None
 
 
 def _nearby_lookup(value: str) -> tuple[str, str | None] | None:
@@ -333,7 +397,11 @@ Schema:
     "timeWindows": {{}}
   }},
   "clarificationRequired": false,
-  "clarificationMessage": null
+  "clarificationMessage": null,
+  "choiceRequired": false,
+  "choiceType": null,
+  "choiceQuery": "",
+  "message": null
 }}
 
 Saved location tag context:
@@ -361,6 +429,9 @@ Instructions:
 - If the origin is omitted but the instruction starts from home and home is saved, use home.
 - If the origin is omitted without a home reference, leave origin as an empty string so backend default origin rules can use currentLocation, then home.
 - If the final destination is omitted but the user says return home, use home.
+- For vague food requests like "bring me to dinner", "I want to eat breakfast", "eat food", or "I'm hungry", set choiceRequired true, choiceType "food", and message like "What would you like for dinner?". Do not set a destination.
+- Do not set choiceRequired for specific food/place requests like "nearest McDonald's", "Burger King nearby", "Japanese food near me", or "Starbucks near KL Sentral"; keep those as routable nearby place strings.
+- For non-food category requests like "nearest mall", "nearest hospital", or "nearest clinic", set choiceRequired true, choiceType "location", choiceQuery to "mall", "hospital", or "clinic", and message like "Choose a nearby mall.".
 - If an important location is ambiguous, set clarificationRequired true with one short question.
 
 User instruction:
@@ -407,6 +478,10 @@ async def plan_trip(
         ) from exc
 
     async def parse_node(state: PlannerState) -> PlannerState:
+        direct_choice = _direct_choice_intent(state["instruction"])
+        if direct_choice:
+            return {"parsed": direct_choice}
+
         parsed = await _parse_with_deepseek(
             instruction=state["instruction"],
             location_tags=state["location_tags"],
@@ -422,6 +497,21 @@ async def plan_trip(
         parsed = state["parsed"]
         if parsed.clarificationRequired:
             return {"clarification_message": parsed.clarificationMessage}
+
+        if parsed.choiceRequired:
+            reference_origin, _ = _default_origin(
+                user_settings=state["user_settings"],
+                location_tags=state["location_tags"],
+            )
+            return {
+                "choice_response": TripPlannerResponse(
+                    choiceRequired=True,
+                    choiceType=parsed.choiceType if parsed.choiceType in {"food", "location"} else "food",
+                    choiceQuery=parsed.choiceQuery,
+                    message=parsed.message or "What would you like?",
+                    referenceOrigin=reference_origin,
+                )
+            }
 
         origin, missing_origin = _resolve_origin_value(
             parsed.origin,
@@ -546,7 +636,7 @@ async def plan_trip(
         }
 
     async def route_node(state: PlannerState) -> PlannerState:
-        if state.get("clarification_message"):
+        if state.get("clarification_message") or state.get("choice_response"):
             return {}
 
         plan = state["normalized_plan"]
@@ -585,6 +675,10 @@ async def plan_trip(
             clarificationRequired=True,
             clarificationMessage=clarification_message,
         )
+
+    choice_response = final_state.get("choice_response")
+    if choice_response:
+        return choice_response
 
     route_response = final_state["route_response"]
     return TripPlannerResponse(

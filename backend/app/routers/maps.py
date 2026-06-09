@@ -6,11 +6,14 @@ from backend.app.schemas.trip_planner import (
     CurrentLocationRequest,
     LocationTagRequest,
     LocationTagsResponse,
+    PlaceResult,
+    PlaceSearchRequest,
+    PlaceSearchResponse,
     TripPlannerRequest,
     TripPlannerResponse,
     UserSettingsResponse,
 )
-from backend.app.services.google_places import search_place
+from backend.app.services.google_places import search_place, search_places
 from backend.app.services.google_routes import compute_route
 from backend.app.services.memory_service import (
     get_location_tags,
@@ -36,6 +39,10 @@ def _default_origin() -> str:
     return ""
 
 
+def _origin_or_default(origin: str) -> str:
+    return origin.strip() or _default_origin()
+
+
 @router.get("/maps/config")
 def maps_config(settings: Settings = Depends(get_settings)) -> dict[str, str]:
     if not settings.google_maps_browser_key:
@@ -52,7 +59,7 @@ async def routes(
     request: RouteRequest,
     settings: Settings = Depends(get_settings),
 ) -> RouteResponse:
-    origin = request.origin.strip() or _default_origin()
+    origin = _origin_or_default(request.origin)
     if not origin:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
@@ -110,6 +117,39 @@ async def save_current_location(
         )
 
     return UserSettingsResponse(**set_current_location(place.address))
+
+
+@router.post("/places/search-nearby", response_model=PlaceSearchResponse)
+async def search_nearby_places(
+    request: PlaceSearchRequest,
+    settings: Settings = Depends(get_settings),
+) -> PlaceSearchResponse:
+    origin = _origin_or_default(request.origin)
+    if not origin:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Set Current Location in Settings or save your Home address first.",
+        )
+
+    query = request.query.strip()
+    places = await search_places(
+        text_query=f"{query} near {origin}",
+        fallback_label=query,
+        api_key=settings.google_maps_server_key,
+        max_result_count=3,
+    )
+    return PlaceSearchResponse(
+        referenceOrigin=origin,
+        results=[
+            PlaceResult(
+                name=place.label,
+                address=place.address,
+                rating=place.rating,
+                googleMapsUri=place.google_maps_uri,
+            )
+            for place in places
+        ],
+    )
 
 
 @router.post("/trip-planner", response_model=TripPlannerResponse)

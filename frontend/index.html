@@ -147,9 +147,48 @@
             <span>distance</span>
           </div>
         </div>
+
+        <div id="trip-choice-modal" class="trip-choice-modal hidden" aria-hidden="true">
+          <div class="trip-choice-dialog" role="dialog" aria-modal="true" aria-labelledby="trip-choice-title">
+            <div class="trip-choice-header">
+              <h2 id="trip-choice-title">What would you like?</h2>
+              <button id="trip-choice-close" class="trip-choice-close" type="button">Close</button>
+            </div>
+
+            <div class="trip-choice-search">
+              <input
+                id="trip-choice-input"
+                class="route-input"
+                type="text"
+                placeholder="I want Japanese food"
+              />
+              <button id="trip-choice-voice" class="trip-choice-voice" type="button" aria-label="Voice input">
+                Mic
+              </button>
+            </div>
+
+            <button id="trip-choice-search-button" class="go-button trip-choice-primary" type="button">
+              Search
+            </button>
+
+            <div id="trip-choice-food-tools" class="trip-choice-food-tools">
+              <button id="trip-choice-wheel-toggle" class="trip-choice-link" type="button">
+                Can't decide? Spin the wheel of food.
+              </button>
+              <div id="trip-choice-wheel" class="trip-choice-wheel hidden">
+                <div id="trip-choice-wheel-value" class="trip-choice-wheel-value">Mamak</div>
+                <button id="trip-choice-spin" class="tag-save-button" type="button">Spin</button>
+              </div>
+            </div>
+
+            <p id="trip-choice-status" class="status-text planner-status" role="status"></p>
+            <div id="trip-choice-results" class="trip-choice-results"></div>
+          </div>
+        </div>
       </section>
     </main>
 
     <script src="/static/app.js"></script>
+    <script src="/static/trip_modal.js"></script>
   </body>
 </html>

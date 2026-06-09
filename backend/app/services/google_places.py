@@ -54,6 +54,21 @@ async def search_place(
     fallback_label: str,
     api_key: str,
 ) -> ResolvedPlace | None:
+    places = await search_places(
+        text_query=text_query,
+        fallback_label=fallback_label,
+        api_key=api_key,
+        max_result_count=1,
+    )
+    return places[0] if places else None
+
+
+async def search_places(
+    text_query: str,
+    fallback_label: str,
+    api_key: str,
+    max_result_count: int = 3,
+) -> list[ResolvedPlace]:
     if not api_key:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -63,11 +78,11 @@ async def search_place(
     cleaned_query = text_query.strip()
     cleaned_label = fallback_label.strip() or cleaned_query
     if not cleaned_query:
-        return None
+        return []
 
     request_body = {
         "textQuery": cleaned_query,
-        "maxResultCount": 1,
+        "maxResultCount": max(1, min(max_result_count, 10)),
         "languageCode": "en",
         "regionCode": "MY",
     }
@@ -107,16 +122,20 @@ async def search_place(
 
     places = payload.get("places") or []
     if not places:
-        return None
+        return []
 
-    place = places[0]
-    display_name = place.get("displayName") or {}
-    label = display_name.get("text") or cleaned_label
-    address = place.get("formattedAddress") or label
-    rating = place.get("rating")
-    return ResolvedPlace(
-        label=label,
-        address=address,
-        google_maps_uri=place.get("googleMapsUri") or "",
-        rating=rating if isinstance(rating, (int, float)) else None,
-    )
+    resolved_places: list[ResolvedPlace] = []
+    for place in places:
+        display_name = place.get("displayName") or {}
+        label = display_name.get("text") or cleaned_label
+        address = place.get("formattedAddress") or label
+        rating = place.get("rating")
+        resolved_places.append(
+            ResolvedPlace(
+                label=label,
+                address=address,
+                google_maps_uri=place.get("googleMapsUri") or "",
+                rating=rating if isinstance(rating, (int, float)) else None,
+            )
+        )
+    return resolved_places

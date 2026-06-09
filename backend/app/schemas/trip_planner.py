@@ -23,6 +23,23 @@ class CurrentLocationRequest(BaseModel):
     address: str = Field(default="", max_length=500)
 
 
+class PlaceSearchRequest(BaseModel):
+    query: str = Field(..., min_length=1, max_length=500)
+    origin: str = Field(default="", max_length=500)
+
+
+class PlaceResult(BaseModel):
+    name: str
+    address: str
+    rating: float | None = None
+    googleMapsUri: str = ""
+
+
+class PlaceSearchResponse(BaseModel):
+    referenceOrigin: str
+    results: list[PlaceResult] = Field(default_factory=list)
+
+
 class TripPreferences(BaseModel):
     avoidHighways: bool = False
     avoidTolls: bool = False
@@ -56,3 +73,8 @@ class TripPlannerResponse(BaseModel):
     )
     clarificationRequired: bool = False
     clarificationMessage: str | None = None
+    choiceRequired: bool = False
+    choiceType: Literal["food", "location"] | None = None
+    choiceQuery: str = ""
+    message: str | None = None
+    referenceOrigin: str = ""

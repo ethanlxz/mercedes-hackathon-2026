@@ -479,6 +479,146 @@ select {
   font-weight: 900;
 }
 
+.trip-choice-modal {
+  position: absolute;
+  inset: 0;
+  z-index: 24;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(0, 0, 0, 0.36);
+}
+
+.trip-choice-dialog {
+  width: min(520px, 100%);
+  max-height: min(720px, calc(100vh - 48px));
+  overflow: auto;
+  padding: 22px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 22px;
+  background: rgba(18, 20, 22, 0.97);
+  box-shadow: 0 28px 70px rgba(0, 0, 0, 0.42);
+}
+
+.trip-choice-header {
+  display: flex;
+  gap: 14px;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.trip-choice-header h2 {
+  margin: 0;
+  color: #fff;
+  font-size: 24px;
+  font-weight: 900;
+  line-height: 1.15;
+}
+
+.trip-choice-close,
+.trip-choice-voice {
+  height: 46px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 13px;
+  background: rgba(255, 255, 255, 0.09);
+  color: #fff;
+  font-size: 14px;
+  font-weight: 900;
+}
+
+.trip-choice-close {
+  padding: 0 14px;
+  text-transform: uppercase;
+}
+
+.trip-choice-search {
+  display: grid;
+  grid-template-columns: 1fr 70px;
+  gap: 10px;
+  margin-top: 18px;
+}
+
+.trip-choice-primary {
+  width: 100%;
+  margin-top: 12px;
+}
+
+.trip-choice-food-tools {
+  margin-top: 14px;
+}
+
+.trip-choice-link {
+  width: 100%;
+  min-height: 48px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.07);
+  color: rgba(255, 255, 255, 0.86);
+  font-size: 16px;
+  font-weight: 850;
+}
+
+.trip-choice-wheel {
+  display: grid;
+  gap: 12px;
+  margin-top: 12px;
+  padding: 16px;
+  border-radius: 18px;
+  background: radial-gradient(circle at 50% 36%, rgba(22, 133, 255, 0.24), rgba(255, 255, 255, 0.06));
+}
+
+.trip-choice-wheel-value {
+  display: grid;
+  place-items: center;
+  min-height: 108px;
+  border: 7px solid rgba(22, 133, 255, 0.58);
+  border-radius: 999px;
+  color: #fff;
+  font-size: 30px;
+  font-weight: 950;
+}
+
+.trip-choice-results {
+  display: grid;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.trip-choice-result {
+  width: 100%;
+  padding: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+  text-align: left;
+}
+
+.trip-choice-result strong {
+  display: block;
+  font-size: 18px;
+  font-weight: 900;
+  line-height: 1.2;
+}
+
+.trip-choice-result span {
+  display: block;
+  margin-top: 5px;
+  color: rgba(255, 255, 255, 0.72);
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.35;
+}
+
+.trip-choice-result em {
+  display: inline-block;
+  margin-top: 8px;
+  color: #d8eaff;
+  font-size: 13px;
+  font-style: normal;
+  font-weight: 900;
+}
+
 @media (max-width: 760px) {
   .carplay-shell {
     min-height: 100vh;
@@ -550,5 +690,23 @@ select {
 
   .bottom-pill span {
     font-size: 10px;
+  }
+
+  .trip-choice-modal {
+    padding: 14px;
+  }
+
+  .trip-choice-dialog {
+    max-height: calc(100vh - 28px);
+    padding: 16px;
+    border-radius: 18px;
+  }
+
+  .trip-choice-header h2 {
+    font-size: 20px;
+  }
+
+  .trip-choice-search {
+    grid-template-columns: 1fr 58px;
   }
 }

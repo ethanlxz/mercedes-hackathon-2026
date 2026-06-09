@@ -711,6 +711,16 @@ async function submitTripPlan() {
 
   try {
     const plan = await requestTripPlan(instruction);
+    if (plan.choiceRequired) {
+      clearRoute();
+      if (window.TripChoiceModal) {
+        window.TripChoiceModal.open(plan);
+      } else {
+        setStatus(plan.message || "More information is needed.", true);
+      }
+      return;
+    }
+
     if (plan.clarificationRequired) {
       clearRoute();
       setStatus(plan.clarificationMessage || "More information is needed.", true);
@@ -754,6 +764,15 @@ updateClock();
 setInterval(updateClock, 30_000);
 preloadTags();
 preloadSettings();
+
+window.CarplayApp = {
+  requestRoute,
+  renderRoute,
+  setPlannerStatus(message, isError = false) {
+    state.mode = "planner";
+    setStatus(message, isError);
+  },
+};
 
 loadMapConfig().catch((error) => {
   setStatus(error.message, true);
