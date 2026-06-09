@@ -15,6 +15,11 @@ from backend.app.schemas.trip_planner import (
 from backend.app.services.google_places import resolve_nearby_place, search_place
 from backend.app.services.google_routes import compute_multi_stop_route
 from backend.app.services.memory_service import get_preferences, update_preferences
+from backend.app.services.place_categories import (
+    PLACE_CATEGORY_TYPES,
+    normalize_place_category,
+    place_category_pattern,
+)
 
 
 class AgentParseResult(BaseModel):
@@ -27,6 +32,7 @@ class AgentParseResult(BaseModel):
     choiceRequired: bool = False
     choiceType: str | None = None
     choiceQuery: str = ""
+    choiceReference: str = ""
     message: str | None = None
 
 
@@ -75,7 +81,7 @@ SPECIFIC_FOOD_TERMS = {
     "cafe",
     "coffee",
 }
-LOCATION_PICKER_TERMS = {"mall", "hospital", "clinic"}
+PLACE_CATEGORY_TERMS = set(PLACE_CATEGORY_TYPES)
 
 
 def _clean_text(value: str) -> str:
@@ -135,6 +141,32 @@ def _default_origin(
     return "", "Please set Current Location in Settings or save your Home address first."
 
 
+async def _choice_reference_origin(
+    reference: str,
+    user_settings: dict[str, str],
+    location_tags: dict[str, str],
+    google_maps_server_key: str,
+) -> tuple[str, str | None]:
+    cleaned_reference = _clean_text(reference)
+    if not cleaned_reference:
+        return _default_origin(user_settings, location_tags)
+
+    resolved_tag, missing_tag = _resolve_tag_value(cleaned_reference, location_tags)
+    if missing_tag:
+        return "", f"Please save your {missing_tag.title()} address with Add Tags first."
+
+    try:
+        place = await search_place(
+            text_query=resolved_tag,
+            fallback_label=resolved_tag,
+            api_key=google_maps_server_key,
+        )
+    except HTTPException:
+        place = None
+
+    return (place.address if place else resolved_tag), None
+
+
 def _has_nearby_intent(value: str) -> bool:
     normalized = _clean_text(value).lower()
     return (
@@ -151,6 +183,44 @@ def _choice_message(instruction: str) -> str:
     return "What would you like to eat?"
 
 
+def _extract_near_reference(instruction: str) -> str:
+    normalized = _clean_text(instruction)
+    match = re.search(
+        r"\bnear\s+(?P<reference>.+?)(?:\s+(?:too|also|as well))?$",
+        normalized,
+        flags=re.IGNORECASE,
+    )
+    if not match:
+        return ""
+    reference = _clean_text(match.group("reference"))
+    return re.sub(r"[.?!,;:]+$", "", reference).strip()
+
+
+def _category_picker_match(instruction: str) -> re.Match[str] | None:
+    normalized = _clean_text(instruction).lower()
+    return re.search(
+        rf"\b(?:nearest|nearby|closest|bring|take|drive|go|send|route|navigate)\s+(?:me\s+)?(?:to\s+)?(?:a\s+|an\s+|the\s+)?(?P<category>{place_category_pattern()})s?\b",
+        normalized,
+    )
+
+
+def _contains_concrete_place_category(instruction: str) -> bool:
+    normalized = _clean_text(instruction).lower()
+    return any(
+        re.search(rf"\b{re.escape(category)}s?\b", normalized)
+        for category in PLACE_CATEGORY_TERMS | SPECIFIC_FOOD_TERMS
+    )
+
+
+def _has_itinerary_context(instruction: str) -> bool:
+    normalized = _clean_text(instruction).lower()
+    return bool(
+        re.search(r"\b(?:from|start(?:ing)? at|start(?:ing)? from)\b", normalized)
+        or len(re.findall(r"\b(?:then|after that|next)\b", normalized)) > 0
+        or len(re.findall(r"\bto\b", normalized)) > 1
+    )
+
+
 def _direct_choice_intent(instruction: str) -> AgentParseResult | None:
     normalized = _clean_text(instruction).lower()
     if not normalized:
@@ -163,19 +233,18 @@ def _direct_choice_intent(instruction: str) -> AgentParseResult | None:
             choiceRequired=True,
             choiceType="food",
             choiceQuery="",
+            choiceReference=_extract_near_reference(instruction),
             message=_choice_message(instruction),
         )
 
-    nearby_category_match = re.search(
-        r"\b(?:nearest|nearby|closest)\s+(?P<category>mall|hospital|clinic)s?\b",
-        normalized,
-    )
+    nearby_category_match = _category_picker_match(instruction)
     if nearby_category_match:
-        category = nearby_category_match.group("category")
+        category = normalize_place_category(nearby_category_match.group("category"))
         return AgentParseResult(
             choiceRequired=True,
             choiceType="location",
             choiceQuery=category,
+            choiceReference=_extract_near_reference(instruction),
             message=f"Choose a nearby {category}.",
         )
 
@@ -401,6 +470,7 @@ Schema:
   "choiceRequired": false,
   "choiceType": null,
   "choiceQuery": "",
+  "choiceReference": "",
   "message": null
 }}
 
@@ -429,9 +499,13 @@ Instructions:
 - If the origin is omitted but the instruction starts from home and home is saved, use home.
 - If the origin is omitted without a home reference, leave origin as an empty string so backend default origin rules can use currentLocation, then home.
 - If the final destination is omitted but the user says return home, use home.
-- For vague food requests like "bring me to dinner", "I want to eat breakfast", "eat food", or "I'm hungry", set choiceRequired true, choiceType "food", and message like "What would you like for dinner?". Do not set a destination.
+- For vague meal or hunger requests like "bring me to dinner", "I want to eat breakfast", "eat food", "find me a lunch spot", or "I'm hungry", set choiceRequired true, choiceType "food", and message like "What would you like for lunch?". Do not set a destination.
+- If a vague meal request is embedded in a larger itinerary, still fill origin, stops, and destination for the non-meal route context, then set choiceRequired true for the meal choice.
+- Example: "I want to go from home to KLCC then go Everynation Puchong, find me a lunch spot near Everynation too" should keep origin home, include KLCC as a stop, destination Everynation Puchong, set choiceRequired true, choiceType "food", message "What would you like for lunch?", and choiceReference "Everynation".
+- If a choice request includes a nearby reference like "near Everynation", "around KLCC", or "near my office", put that reference in choiceReference so backend tools search near that place instead of Current Location/Home.
+- Do not treat concrete place categories like cafe, coffee shop, restaurant, mall, hospital, or clinic as vague meals.
 - Do not set choiceRequired for specific food/place requests like "nearest McDonald's", "Burger King nearby", "Japanese food near me", or "Starbucks near KL Sentral"; keep those as routable nearby place strings.
-- For non-food category requests like "nearest mall", "nearest hospital", or "nearest clinic", set choiceRequired true, choiceType "location", choiceQuery to "mall", "hospital", or "clinic", and message like "Choose a nearby mall.".
+- For category requests like "bring me to cafe", "nearest restaurant", "nearest mall", "nearest hospital", or "nearest clinic", set choiceRequired true, choiceType "location", choiceQuery to the category, and message like "Choose a nearby cafe.".
 - If an important location is ambiguous, set clarificationRequired true with one short question.
 
 User instruction:
@@ -448,6 +522,14 @@ User instruction:
     try:
         parsed_content = _extract_json_object(str(result.content))
         parsed_result = AgentParseResult.model_validate(parsed_content)
+        category_choice = _direct_choice_intent(instruction)
+        if (
+            parsed_result.choiceRequired
+            and parsed_result.choiceType == "food"
+            and _contains_concrete_place_category(instruction)
+            and category_choice
+        ):
+            return category_choice
         if parsed_result.clarificationRequired:
             fallback_result = _fallback_nearby_parse(instruction)
             if fallback_result:
@@ -479,7 +561,7 @@ async def plan_trip(
 
     async def parse_node(state: PlannerState) -> PlannerState:
         direct_choice = _direct_choice_intent(state["instruction"])
-        if direct_choice:
+        if direct_choice and not _has_itinerary_context(state["instruction"]):
             return {"parsed": direct_choice}
 
         parsed = await _parse_with_deepseek(
@@ -499,15 +581,134 @@ async def plan_trip(
             return {"clarification_message": parsed.clarificationMessage}
 
         if parsed.choiceRequired:
-            reference_origin, _ = _default_origin(
+            reference_origin, reference_clarification = await _choice_reference_origin(
+                reference=parsed.choiceReference,
                 user_settings=state["user_settings"],
                 location_tags=state["location_tags"],
+                google_maps_server_key=google_maps_server_key,
             )
+            if reference_clarification:
+                return {"clarification_message": reference_clarification}
+
+            plan: NormalizedTripPlan | None = None
+            waypoints: list[TripWaypoint] = []
+            if parsed.origin or parsed.stops or parsed.destination:
+                origin, missing_origin = _resolve_origin_value(
+                    parsed.origin,
+                    state["location_tags"],
+                    state["user_settings"],
+                )
+                if missing_origin:
+                    if missing_origin == "currentLocation":
+                        return {
+                            "clarification_message": (
+                                "Please set Current Location in Settings first."
+                            )
+                        }
+                    return {
+                        "clarification_message": (
+                            f"Please save your {missing_origin.title()} address with Add Tags first."
+                        )
+                    }
+
+                if not origin:
+                    origin, default_origin_clarification = _default_origin(
+                        user_settings=state["user_settings"],
+                        location_tags=state["location_tags"],
+                    )
+                    if default_origin_clarification:
+                        return {"clarification_message": default_origin_clarification}
+
+                stops: list[str] = []
+                stop_labels: list[str] = []
+                previous_waypoint = origin
+                for stop in parsed.stops:
+                    resolved_stop, missing_stop = _resolve_tag_value(
+                        stop,
+                        state["location_tags"],
+                    )
+                    if missing_stop:
+                        return {
+                            "clarification_message": (
+                                f"Please save your {missing_stop.title()} address with Add Tags first."
+                            )
+                        }
+
+                    stop_address, stop_label, stop_clarification = await _resolve_nearby_waypoint(
+                        value=resolved_stop,
+                        default_reference=previous_waypoint,
+                        location_tags=state["location_tags"],
+                        google_maps_server_key=google_maps_server_key,
+                    )
+                    if stop_clarification:
+                        return {"clarification_message": stop_clarification}
+
+                    stops.append(stop_address)
+                    stop_labels.append(stop_label)
+                    previous_waypoint = stop_address
+
+                destination, missing_destination = _resolve_tag_value(
+                    parsed.destination,
+                    state["location_tags"],
+                )
+                if missing_destination:
+                    return {
+                        "clarification_message": (
+                            f"Please save your {missing_destination.title()} address with Add Tags first."
+                        )
+                    }
+
+                if destination:
+                    destination, destination_label, destination_clarification = await _resolve_nearby_waypoint(
+                        value=destination,
+                        default_reference=origin,
+                        location_tags=state["location_tags"],
+                        google_maps_server_key=google_maps_server_key,
+                    )
+                    if destination_clarification:
+                        return {"clarification_message": destination_clarification}
+
+                    preferences = _merge_preferences(
+                        parsed_preferences=parsed.preferences,
+                        stored_preferences=state["stored_preferences"],
+                    )
+                    plan = NormalizedTripPlan(
+                        origin=origin,
+                        stops=stops,
+                        destination=destination,
+                        preferences=preferences,
+                    )
+                    waypoints = [
+                        TripWaypoint(
+                            role="origin",
+                            label=_waypoint_label(origin, state["location_tags"]),
+                            address=origin,
+                        )
+                    ]
+                    waypoints.extend(
+                        TripWaypoint(role="stop", label=label, address=stop)
+                        for label, stop in zip(stop_labels, stops, strict=False)
+                    )
+                    waypoints.append(
+                        TripWaypoint(
+                            role="destination",
+                            label=destination_label,
+                            address=destination,
+                        )
+                    )
+                    waypoints = await _enrich_waypoint_metadata(
+                        waypoints=waypoints,
+                        google_maps_server_key=google_maps_server_key,
+                    )
+
             return {
                 "choice_response": TripPlannerResponse(
+                    normalizedPlan=plan,
+                    waypoints=waypoints,
                     choiceRequired=True,
                     choiceType=parsed.choiceType if parsed.choiceType in {"food", "location"} else "food",
                     choiceQuery=parsed.choiceQuery,
+                    choiceReference=parsed.choiceReference,
                     message=parsed.message or "What would you like?",
                     referenceOrigin=reference_origin,
                 )

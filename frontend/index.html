@@ -5,6 +5,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>CarPlay Routes</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css"
+    />
     <link rel="stylesheet" href="/static/style.css" />
   </head>
   <body class="bg-neutral-950 text-white">
@@ -152,7 +156,9 @@
           <div class="trip-choice-dialog" role="dialog" aria-modal="true" aria-labelledby="trip-choice-title">
             <div class="trip-choice-header">
               <h2 id="trip-choice-title">What would you like?</h2>
-              <button id="trip-choice-close" class="trip-choice-close" type="button">Close</button>
+              <button id="trip-choice-close" class="trip-choice-close" type="button" aria-label="Close modal">
+                <i class="fa-solid fa-xmark" aria-hidden="true"></i>
+              </button>
             </div>
 
             <div class="trip-choice-search">
@@ -163,7 +169,7 @@
                 placeholder="I want Japanese food"
               />
               <button id="trip-choice-voice" class="trip-choice-voice" type="button" aria-label="Voice input">
-                Mic
+                <i class="fa-solid fa-microphone" aria-hidden="true"></i>
               </button>
             </div>
 

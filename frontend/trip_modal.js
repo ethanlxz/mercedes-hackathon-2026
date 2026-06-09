@@ -13,6 +13,8 @@ const modalState = {
   referenceOrigin: "",
   choiceType: "food",
   choiceQuery: "",
+  choiceReference: "",
+  normalizedPlan: null,
   selectedCategory: foodCategories[0],
   recognition: null,
 };
@@ -134,10 +136,21 @@ async function chooseDestination(place) {
   setModalStatus("Routing to destination...");
 
   try {
-    const route = await window.CarplayApp.requestRoute(
-      modalState.referenceOrigin,
-      place.address,
-    );
+    const response = await fetch("/api/trip-planner/choice-route", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        normalizedPlan: modalState.normalizedPlan,
+        choiceReference: modalState.choiceReference,
+        selectedPlace: place,
+      }),
+    });
+    const route = await response.json().catch(() => ({}));
+
+    if (!response.ok) {
+      throw new Error(route.detail || "Could not route to that destination.");
+    }
+
     await window.CarplayApp.renderRoute(route);
     window.CarplayApp.setPlannerStatus(`Route ready: ${place.name}.`);
     closeTripChoiceModal();
@@ -185,6 +198,8 @@ function openTripChoiceModal(plan) {
   modalState.referenceOrigin = plan.referenceOrigin || "";
   modalState.choiceType = plan.choiceType || "food";
   modalState.choiceQuery = plan.choiceQuery || "";
+  modalState.choiceReference = plan.choiceReference || "";
+  modalState.normalizedPlan = plan.normalizedPlan || null;
   modalElements.title.textContent = plan.message || "What would you like?";
   modalElements.input.value = "";
   modalElements.results.innerHTML = "";

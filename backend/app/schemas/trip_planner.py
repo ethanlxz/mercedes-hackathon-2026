@@ -62,6 +62,12 @@ class TripPlannerRequest(BaseModel):
     instruction: str = Field(..., min_length=1, max_length=3000)
 
 
+class TripChoiceRouteRequest(BaseModel):
+    normalizedPlan: NormalizedTripPlan | None = None
+    choiceReference: str = Field(default="", max_length=500)
+    selectedPlace: PlaceResult
+
+
 class TripPlannerResponse(BaseModel):
     normalizedPlan: NormalizedTripPlan | None = None
     waypoints: list[TripWaypoint] = Field(default_factory=list)
@@ -76,5 +82,6 @@ class TripPlannerResponse(BaseModel):
     choiceRequired: bool = False
     choiceType: Literal["food", "location"] | None = None
     choiceQuery: str = ""
+    choiceReference: str = ""
     message: str | None = None
     referenceOrigin: str = ""

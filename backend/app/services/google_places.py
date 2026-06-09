@@ -53,12 +53,16 @@ async def search_place(
     text_query: str,
     fallback_label: str,
     api_key: str,
+    included_type: str | None = None,
+    strict_type_filtering: bool = False,
 ) -> ResolvedPlace | None:
     places = await search_places(
         text_query=text_query,
         fallback_label=fallback_label,
         api_key=api_key,
         max_result_count=1,
+        included_type=included_type,
+        strict_type_filtering=strict_type_filtering,
     )
     return places[0] if places else None
 
@@ -68,6 +72,8 @@ async def search_places(
     fallback_label: str,
     api_key: str,
     max_result_count: int = 3,
+    included_type: str | None = None,
+    strict_type_filtering: bool = False,
 ) -> list[ResolvedPlace]:
     if not api_key:
         raise HTTPException(
@@ -86,6 +92,10 @@ async def search_places(
         "languageCode": "en",
         "regionCode": "MY",
     }
+    if included_type:
+        request_body["includedType"] = included_type
+        request_body["strictTypeFiltering"] = strict_type_filtering
+
     headers = {
         "Content-Type": "application/json",
         "X-Goog-Api-Key": api_key,

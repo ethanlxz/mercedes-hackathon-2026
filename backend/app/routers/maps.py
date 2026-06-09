@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 
 from backend.app.core.config import Settings, get_settings
-from backend.app.schemas.routes import RouteRequest, RouteResponse
+from backend.app.schemas.routes import RouteRequest, RouteResponse, RouteWaypoint
 from backend.app.schemas.trip_planner import (
     CurrentLocationRequest,
     LocationTagRequest,
@@ -9,18 +9,21 @@ from backend.app.schemas.trip_planner import (
     PlaceResult,
     PlaceSearchRequest,
     PlaceSearchResponse,
+    TripChoiceRouteRequest,
+    TripPreferences,
     TripPlannerRequest,
     TripPlannerResponse,
     UserSettingsResponse,
 )
 from backend.app.services.google_places import search_place, search_places
-from backend.app.services.google_routes import compute_route
+from backend.app.services.google_routes import compute_multi_stop_route, compute_route
 from backend.app.services.memory_service import (
     get_location_tags,
     get_user_settings,
     set_current_location,
     set_location_tag,
 )
+from backend.app.services.place_categories import google_place_type_for_category
 from backend.app.services.trip_planner_service import plan_trip
 
 
@@ -41,6 +44,58 @@ def _default_origin() -> str:
 
 def _origin_or_default(origin: str) -> str:
     return origin.strip() or _default_origin()
+
+
+def _place_type_filter(query: str) -> str | None:
+    return google_place_type_for_category(query)
+
+
+def _matches_reference(value: str, reference: str) -> bool:
+    cleaned_value = " ".join(value.lower().split())
+    cleaned_reference = " ".join(reference.lower().split())
+    return bool(cleaned_reference) and (
+        cleaned_reference in cleaned_value or cleaned_value in cleaned_reference
+    )
+
+
+def _choice_route_addresses(
+    request: TripChoiceRouteRequest,
+) -> tuple[str, list[str], str]:
+    selected_address = request.selectedPlace.address.strip()
+    if not selected_address:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Selected place is missing an address.",
+        )
+
+    plan = request.normalizedPlan
+    if not plan:
+        origin = _origin_or_default("")
+        if not origin:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="Set Current Location in Settings or save your Home address first.",
+            )
+        return origin, [], selected_address
+
+    sequence = [
+        plan.origin.strip(),
+        *[stop.strip() for stop in plan.stops if stop.strip()],
+        plan.destination.strip(),
+    ]
+    sequence = [address for address in sequence if address]
+    if not sequence:
+        origin = _origin_or_default("")
+        return origin, [], selected_address
+
+    insert_after = len(sequence) - 1
+    if request.choiceReference.strip():
+        for index, address in enumerate(sequence):
+            if _matches_reference(address, request.choiceReference):
+                insert_after = index
+
+    sequence.insert(insert_after + 1, selected_address)
+    return sequence[0], sequence[1:-1], sequence[-1]
 
 
 @router.get("/maps/config")
@@ -132,11 +187,14 @@ async def search_nearby_places(
         )
 
     query = request.query.strip()
+    included_type = _place_type_filter(query)
     places = await search_places(
         text_query=f"{query} near {origin}",
         fallback_label=query,
         api_key=settings.google_maps_server_key,
         max_result_count=3,
+        included_type=included_type,
+        strict_type_filtering=bool(included_type),
     )
     return PlaceSearchResponse(
         referenceOrigin=origin,
@@ -150,6 +208,39 @@ async def search_nearby_places(
             for place in places
         ],
     )
+
+
+@router.post("/trip-planner/choice-route", response_model=RouteResponse)
+async def trip_choice_route(
+    request: TripChoiceRouteRequest,
+    settings: Settings = Depends(get_settings),
+) -> RouteResponse:
+    origin, stops, destination = _choice_route_addresses(request)
+    response = await compute_multi_stop_route(
+        origin=origin,
+        stops=stops,
+        destination=destination,
+        preferences=request.normalizedPlan.preferences
+        if request.normalizedPlan
+        else TripPreferences(),
+        api_key=settings.google_maps_server_key,
+        optimize_waypoints=False,
+    )
+    response.waypoints = [
+        RouteWaypoint(role="origin", label="Start", address=origin),
+        *[
+            RouteWaypoint(role="stop", label=f"Stop {index + 1}", address=stop)
+            for index, stop in enumerate(stops)
+        ],
+        RouteWaypoint(
+            role="destination",
+            label=request.selectedPlace.name or "Destination",
+            address=destination,
+            rating=request.selectedPlace.rating,
+            googleMapsUri=request.selectedPlace.googleMapsUri,
+        ),
+    ]
+    return response
 
 
 @router.post("/trip-planner", response_model=TripPlannerResponse)
