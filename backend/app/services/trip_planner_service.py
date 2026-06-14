@@ -1,54 +1,32 @@
+import asyncio
 import json
+import operator
 import re
-from typing import Any, TypedDict
+from dataclasses import dataclass
+from datetime import datetime, time, timedelta
+from pathlib import Path
+from typing import Annotated, Any, Literal, TypedDict
+from uuid import uuid4
+from zoneinfo import ZoneInfo
 
 from fastapi import HTTPException, status
 from pydantic import BaseModel, Field, ValidationError
 
-from backend.app.schemas.routes import RouteSummary
 from backend.app.schemas.trip_planner import (
     NormalizedTripPlan,
+    PlaceResult,
     TripPlannerResponse,
     TripPreferences,
     TripWaypoint,
 )
-from backend.app.services.google_places import resolve_nearby_place, search_place
-from backend.app.services.google_routes import compute_multi_stop_route
+from backend.app.services.google_places import ResolvedPlace, search_place, search_places
+from backend.app.services.google_routes import compute_multi_stop_route, compute_route_matrix
 from backend.app.services.memory_service import get_preferences, update_preferences
-from backend.app.services.place_categories import (
-    PLACE_CATEGORY_TYPES,
-    normalize_place_category,
-    place_category_pattern,
-)
+from backend.app.services.place_categories import google_place_type_for_category
 
 
-class AgentParseResult(BaseModel):
-    origin: str = ""
-    stops: list[str] = Field(default_factory=list)
-    destination: str = ""
-    preferences: TripPreferences = Field(default_factory=TripPreferences)
-    clarificationRequired: bool = False
-    clarificationMessage: str | None = None
-    choiceRequired: bool = False
-    choiceType: str | None = None
-    choiceQuery: str = ""
-    choiceReference: str = ""
-    message: str | None = None
-
-
-class PlannerState(TypedDict, total=False):
-    instruction: str
-    location_tags: dict[str, str]
-    user_settings: dict[str, str]
-    stored_preferences: dict[str, Any]
-    parsed: AgentParseResult
-    normalized_plan: NormalizedTripPlan
-    waypoints: list[TripWaypoint]
-    route_response: Any
-    clarification_message: str | None
-    choice_response: TripPlannerResponse | None
-
-
+MALAYSIA_TZ = ZoneInfo("Asia/Kuala_Lumpur")
+CHECKPOINT_PATH = Path(__file__).resolve().parents[2] / "data" / "trip_planner.sqlite"
 TAG_ALIASES = {
     "home": {"home", "my home", "house", "my house"},
     "work": {"work", "office", "my office", "workplace", "my workplace"},
@@ -60,376 +38,253 @@ CURRENT_LOCATION_ALIASES = {
     "from here",
     "my location",
 }
-NEARBY_WORDS = {"nearby", "nearest", "closest", "near me"}
-NEARBY_TERMS = r"(?:nearby|neaby|nearest|closest|near me)"
-VAGUE_FOOD_TERMS = {"breakfast", "lunch", "dinner", "supper", "food", "eat", "hungry"}
-SPECIFIC_FOOD_TERMS = {
-    "mcdonald",
-    "mcdonald's",
-    "burger king",
-    "kfc",
-    "starbucks",
-    "japanese",
-    "chinese",
-    "hotpot",
-    "mamak",
-    "indian",
-    "malay",
-    "western",
-    "italian",
-    "restaurant",
-    "cafe",
-    "coffee",
+FOOD_CATEGORY_TERMS = {
+    "food", "breakfast", "lunch", "dinner", "supper", "halal", "japanese",
+    "chinese", "mamak", "indian", "malay", "western", "italian", "restaurant",
+    "cafe", "coffee",
 }
-PLACE_CATEGORY_TERMS = set(PLACE_CATEGORY_TYPES)
 
 
-def _clean_text(value: str) -> str:
+class ParsedPreferences(BaseModel):
+    avoidHighways: bool | None = None
+    avoidTolls: bool | None = None
+    fastestRoute: bool | None = None
+
+
+class WaypointIntent(BaseModel):
+    query: str
+    purpose: str = "stop"
+    resolution: Literal["specific", "category", "food_choice"] = "specific"
+    selectionMode: Literal["auto", "nearest", "choice"] = "auto"
+    nearbyReference: str = ""
+    flexible: bool = False
+    dwellMinutes: int = Field(default=0, ge=0, le=720)
+    maxDriveMinutes: int | None = Field(default=None, ge=1, le=240)
+    arriveBy: str | None = None
+    departAfter: str | None = None
+
+
+class ParsedTrip(BaseModel):
+    origin: str = ""
+    waypoints: list[WaypointIntent] = Field(default_factory=list)
+    preferences: ParsedPreferences = Field(default_factory=ParsedPreferences)
+    optimizeFlexible: bool = False
+    departureTime: str | None = None
+    clarificationQuestion: str | None = None
+
+
+class Candidate(BaseModel):
+    name: str
+    address: str
+    placeId: str = ""
+    latitude: float | None = None
+    longitude: float | None = None
+    rating: float | None = None
+    userRatingCount: int | None = None
+    googleMapsUri: str = ""
+    driveSeconds: int | None = None
+    distanceMeters: int | None = None
+
+
+class ResolvedWaypoint(BaseModel):
+    revision: int
+    index: int
+    intent: WaypointIntent
+    referenceAddress: str
+    candidates: list[Candidate] = Field(default_factory=list)
+    selected: Candidate | None = None
+
+
+class PlannerState(TypedDict, total=False):
+    instruction: str
+    original_instruction: str
+    location_tags: dict[str, str]
+    user_settings: dict[str, str]
+    stored_preferences: dict[str, Any]
+    requested_departure_time: str | None
+    parsed: ParsedTrip
+    revision: int
+    resolved_origin: str
+    preferences: TripPreferences
+    resolved_waypoints: Annotated[list[ResolvedWaypoint], operator.add]
+    pending_question: str | None
+    normalized_plan: NormalizedTripPlan
+    waypoints: list[TripWaypoint]
+    route_response: Any
+    departure_datetime: str
+    planned_order: list[int]
+    schedule_error: str | None
+
+
+@dataclass(frozen=True)
+class PlannerDependencies:
+    google_maps_server_key: str
+    deepseek_api_key: str
+    deepseek_model: str
+    deepseek_base_url: str
+
+
+def _clean(value: str) -> str:
     return " ".join(value.strip().split())
 
 
-def _is_tag_alias(value: str, tag: str) -> bool:
-    normalized = _clean_text(value).lower()
-    return normalized in TAG_ALIASES[tag]
+def _latest_resolved(state: PlannerState) -> dict[int, ResolvedWaypoint]:
+    revision = state.get("revision", 0)
+    latest: dict[int, ResolvedWaypoint] = {}
+    for item in state.get("resolved_waypoints", []):
+        if item.revision == revision:
+            latest[item.index] = item
+    return latest
 
 
-def _resolve_tag_value(value: str, location_tags: dict[str, str]) -> tuple[str, str | None]:
-    cleaned = _clean_text(value)
-    for tag in ("home", "work"):
-        if _is_tag_alias(cleaned, tag):
-            saved_address = location_tags.get(tag, "").strip()
-            if not saved_address:
-                return cleaned, tag
-            return saved_address, None
+def _tag_name(value: str) -> str | None:
+    normalized = _clean(value).lower()
+    for tag, aliases in TAG_ALIASES.items():
+        if normalized in aliases:
+            return tag
+    return None
+
+
+def _resolve_context_value(
+    value: str,
+    location_tags: dict[str, str],
+    user_settings: dict[str, str],
+) -> tuple[str, str | None]:
+    cleaned = _clean(value)
+    if cleaned.lower() in CURRENT_LOCATION_ALIASES:
+        current = _clean(str(user_settings.get("currentLocation") or ""))
+        return (current, None) if current else ("", "Please set Current Location in Settings first.")
+
+    tag = _tag_name(cleaned)
+    if tag:
+        address = _clean(str(location_tags.get(tag) or ""))
+        if not address:
+            return "", f"Please save your {tag.title()} address with Add Tags first."
+        return address, None
     return cleaned, None
 
 
-def _resolve_origin_value(
-    value: str,
-    location_tags: dict[str, str],
-    user_settings: dict[str, str],
-) -> tuple[str, str | None]:
-    cleaned = _clean_text(value)
-    if cleaned.lower() in CURRENT_LOCATION_ALIASES:
-        current_location = str(user_settings.get("currentLocation") or "").strip()
-        if not current_location:
-            return cleaned, "currentLocation"
-        return current_location, None
-
-    return _resolve_tag_value(cleaned, location_tags)
-
-
-def _waypoint_label(address: str, location_tags: dict[str, str]) -> str:
-    for tag, saved_address in location_tags.items():
-        if saved_address and address.strip().lower() == saved_address.strip().lower():
-            return tag.title()
-    return address
-
-
 def _default_origin(
-    user_settings: dict[str, str],
     location_tags: dict[str, str],
+    user_settings: dict[str, str],
 ) -> tuple[str, str | None]:
-    current_location = str(user_settings.get("currentLocation") or "").strip()
-    if current_location:
-        return current_location, None
-
-    home = str(location_tags.get("home") or "").strip()
+    current = _clean(str(user_settings.get("currentLocation") or ""))
+    if current:
+        return current, None
+    home = _clean(str(location_tags.get("home") or ""))
     if home:
         return home, None
-
     return "", "Please set Current Location in Settings or save your Home address first."
 
 
-async def _choice_reference_origin(
-    reference: str,
-    user_settings: dict[str, str],
-    location_tags: dict[str, str],
-    google_maps_server_key: str,
-) -> tuple[str, str | None]:
-    cleaned_reference = _clean_text(reference)
-    if not cleaned_reference:
-        return _default_origin(user_settings, location_tags)
-
-    resolved_tag, missing_tag = _resolve_tag_value(cleaned_reference, location_tags)
-    if missing_tag:
-        return "", f"Please save your {missing_tag.title()} address with Add Tags first."
-
-    try:
-        place = await search_place(
-            text_query=resolved_tag,
-            fallback_label=resolved_tag,
-            api_key=google_maps_server_key,
-        )
-    except HTTPException:
-        place = None
-
-    return (place.address if place else resolved_tag), None
-
-
-def _has_nearby_intent(value: str) -> bool:
-    normalized = _clean_text(value).lower()
-    return (
-        any(word in normalized for word in {*NEARBY_WORDS, "neaby"})
-        or bool(re.search(r"\bnear\s+.+", normalized))
-    )
-
-
-def _choice_message(instruction: str) -> str:
-    normalized = _clean_text(instruction).lower()
-    for meal in ("breakfast", "lunch", "dinner", "supper"):
-        if meal in normalized:
-            return f"What would you like for {meal}?"
-    return "What would you like to eat?"
-
-
-def _extract_near_reference(instruction: str) -> str:
-    normalized = _clean_text(instruction)
-    match = re.search(
-        r"\bnear\s+(?P<reference>.+?)(?:\s+(?:too|also|as well))?$",
-        normalized,
-        flags=re.IGNORECASE,
-    )
-    if not match:
-        return ""
-    reference = _clean_text(match.group("reference"))
-    return re.sub(r"[.?!,;:]+$", "", reference).strip()
-
-
-def _category_picker_match(instruction: str) -> re.Match[str] | None:
-    normalized = _clean_text(instruction).lower()
-    return re.search(
-        rf"\b(?:nearest|nearby|closest|bring|take|drive|go|send|route|navigate)\s+(?:me\s+)?(?:to\s+)?(?:a\s+|an\s+|the\s+)?(?P<category>{place_category_pattern()})s?\b",
-        normalized,
-    )
-
-
-def _contains_concrete_place_category(instruction: str) -> bool:
-    normalized = _clean_text(instruction).lower()
-    return any(
-        re.search(rf"\b{re.escape(category)}s?\b", normalized)
-        for category in PLACE_CATEGORY_TERMS | SPECIFIC_FOOD_TERMS
-    )
-
-
-def _has_itinerary_context(instruction: str) -> bool:
-    normalized = _clean_text(instruction).lower()
-    return bool(
-        re.search(r"\b(?:from|start(?:ing)? at|start(?:ing)? from)\b", normalized)
-        or len(re.findall(r"\b(?:then|after that|next)\b", normalized)) > 0
-        or len(re.findall(r"\bto\b", normalized)) > 1
-    )
-
-
-def _direct_choice_intent(instruction: str) -> AgentParseResult | None:
-    normalized = _clean_text(instruction).lower()
-    if not normalized:
-        return None
-
-    mentions_specific_food = any(term in normalized for term in SPECIFIC_FOOD_TERMS)
-    mentions_vague_food = any(re.search(rf"\b{re.escape(term)}\b", normalized) for term in VAGUE_FOOD_TERMS)
-    if mentions_vague_food and not mentions_specific_food:
-        return AgentParseResult(
-            choiceRequired=True,
-            choiceType="food",
-            choiceQuery="",
-            choiceReference=_extract_near_reference(instruction),
-            message=_choice_message(instruction),
-        )
-
-    nearby_category_match = _category_picker_match(instruction)
-    if nearby_category_match:
-        category = normalize_place_category(nearby_category_match.group("category"))
-        return AgentParseResult(
-            choiceRequired=True,
-            choiceType="location",
-            choiceQuery=category,
-            choiceReference=_extract_near_reference(instruction),
-            message=f"Choose a nearby {category}.",
-        )
-
-    return None
-
-
-def _nearby_lookup(value: str) -> tuple[str, str | None] | None:
-    cleaned = _clean_text(value)
-    if not cleaned:
-        return None
-
-    patterns = [
-        rf"^(?:the\s+)?(?:nearest|closest|nearby|neaby)\s+(?P<query>.+)$",
-        rf"^(?P<query>.+?)\s+{NEARBY_TERMS}(?:\s+(?P<reference>.+))?$",
-        r"^(?P<query>.+?)\s+near\s+(?P<reference>.+)$",
-    ]
-    for pattern in patterns:
-        match = re.match(pattern, cleaned, flags=re.IGNORECASE)
-        if match:
-            query = _clean_text(match.group("query"))
-            reference = match.groupdict().get("reference")
-            if query:
-                return query, _clean_text(reference) if reference else None
-
-    return None
-
-
-def _fallback_nearby_parse(instruction: str) -> AgentParseResult | None:
-    if not _has_nearby_intent(instruction):
-        return None
-
-    patterns = [
-        r"^(?:please\s+)?(?:start\s+)?(?:from|at)\s+(?P<origin>.+?)\s+(?:to|towards|go\s+to)\s+(?P<destination>.+)$",
-        r"^(?:please\s+)?go\s+from\s+(?P<origin>.+?)\s+to\s+(?P<destination>.+)$",
-    ]
-    for pattern in patterns:
-        match = re.match(pattern, _clean_text(instruction), flags=re.IGNORECASE)
-        if match:
-            return AgentParseResult(
-                origin=_clean_text(match.group("origin")),
-                stops=[],
-                destination=_clean_text(match.group("destination")),
-                preferences=TripPreferences(),
-                clarificationRequired=False,
-                clarificationMessage=None,
-            )
-
-    return None
-
-
-def _place_query_label(query: str) -> str:
-    return re.sub(r"^(?:a|an|the)\s+", "", _clean_text(query), flags=re.IGNORECASE)
-
-
-async def _enrich_waypoint_metadata(
-    waypoints: list[TripWaypoint],
-    google_maps_server_key: str,
-) -> list[TripWaypoint]:
-    enriched: list[TripWaypoint] = []
-    for waypoint in waypoints:
-        try:
-            place = await search_place(
-                text_query=waypoint.address,
-                fallback_label=waypoint.label,
-                api_key=google_maps_server_key,
-            )
-        except HTTPException:
-            place = None
-
-        if not place:
-            enriched.append(waypoint)
-            continue
-
-        should_keep_label = waypoint.label.strip().lower() in {"home", "work"}
-        label = waypoint.label if should_keep_label else place.label
-
-        enriched.append(
-            TripWaypoint(
-                role=waypoint.role,
-                label=label or waypoint.label,
-                address=place.address or waypoint.address,
-                rating=place.rating,
-                googleMapsUri=place.google_maps_uri,
-            )
-        )
-    return enriched
-
-
-async def _resolve_nearby_waypoint(
-    value: str,
-    default_reference: str,
-    location_tags: dict[str, str],
-    google_maps_server_key: str,
-) -> tuple[str, str, str | None]:
-    lookup = _nearby_lookup(value)
-    if not lookup:
-        return value, _waypoint_label(value, location_tags), None
-
-    place_query, reference_override = lookup
-    reference_location = default_reference
-    if reference_override:
-        reference_location, missing_tag = _resolve_tag_value(
-            reference_override,
-            location_tags,
-        )
-        if missing_tag:
-            return (
-                value,
-                _place_query_label(place_query),
-                f"Please save your {missing_tag.title()} address with Add Tags first.",
-            )
-
-    resolved_place = await resolve_nearby_place(
-        place_query=place_query,
-        reference_location=reference_location,
-        api_key=google_maps_server_key,
-    )
-    if not resolved_place:
-        return (
-            value,
-            _place_query_label(place_query),
-            (
-                f"I couldn't find a {_place_query_label(place_query)} near "
-                f"{reference_location}. Try another landmark or address."
-            ),
-        )
-
-    return resolved_place.address, resolved_place.label, None
-
-
 def _merge_preferences(
-    parsed_preferences: TripPreferences,
-    stored_preferences: dict[str, Any],
+    parsed: ParsedPreferences,
+    stored: dict[str, Any],
 ) -> TripPreferences:
+    def selected(value: bool | None, key: str) -> bool:
+        return bool(stored.get(key)) if value is None else value
+
     return TripPreferences(
-        avoidHighways=parsed_preferences.avoidHighways
-        or bool(stored_preferences.get("avoidHighways")),
-        avoidTolls=parsed_preferences.avoidTolls
-        or bool(stored_preferences.get("avoidTolls")),
-        fastestRoute=parsed_preferences.fastestRoute
-        or bool(stored_preferences.get("fastestRoute")),
-        timeWindows={
-            **dict(stored_preferences.get("timeWindows") or {}),
-            **parsed_preferences.timeWindows,
-        },
+        avoidHighways=selected(parsed.avoidHighways, "avoidHighways"),
+        avoidTolls=selected(parsed.avoidTolls, "avoidTolls"),
+        fastestRoute=selected(parsed.fastestRoute, "fastestRoute"),
+        timeWindows={},
     )
 
 
-def _should_optimize_waypoints(plan: NormalizedTripPlan) -> bool:
-    return (
-        plan.preferences.fastestRoute
-        and len(plan.stops) > 1
-        and not plan.preferences.timeWindows
+def _candidate_from_place(place: ResolvedPlace) -> Candidate:
+    return Candidate(
+        name=place.label,
+        address=place.address,
+        placeId=place.place_id,
+        latitude=place.latitude,
+        longitude=place.longitude,
+        rating=place.rating,
+        userRatingCount=place.user_rating_count,
+        googleMapsUri=place.google_maps_uri,
     )
 
 
-def _extract_json_object(text: str) -> dict[str, Any]:
-    cleaned = text.strip()
-    if cleaned.startswith("```"):
-        cleaned = re.sub(r"^```(?:json)?\s*", "", cleaned, flags=re.IGNORECASE)
-        cleaned = re.sub(r"\s*```$", "", cleaned)
+def _place_result(candidate: Candidate) -> PlaceResult:
+    return PlaceResult(
+        name=candidate.name,
+        address=candidate.address,
+        placeId=candidate.placeId,
+        latitude=candidate.latitude,
+        longitude=candidate.longitude,
+        rating=candidate.rating,
+        userRatingCount=candidate.userRatingCount,
+        googleMapsUri=candidate.googleMapsUri,
+    )
 
+
+def _parse_clock(value: str | None) -> time | None:
+    if not value:
+        return None
+    cleaned = value.strip().upper().replace(" ", "")
+    for pattern in ("%H:%M", "%I:%M%p", "%I%p"):
+        try:
+            return datetime.strptime(cleaned, pattern).time()
+        except ValueError:
+            continue
+    return None
+
+
+def _duration_seconds(value: str) -> int:
     try:
-        parsed = json.loads(cleaned)
-    except json.JSONDecodeError:
-        match = re.search(r"\{.*\}", cleaned, flags=re.DOTALL)
-        if not match:
-            raise
-        parsed = json.loads(match.group(0))
+        return max(0, int(float(value.rstrip("s"))))
+    except (TypeError, ValueError):
+        return 0
 
-    if not isinstance(parsed, dict):
-        raise ValueError("DeepSeek response was not a JSON object.")
-    return parsed
+
+def _is_food_category_query(value: str) -> bool:
+    words = set(re.findall(r"[a-z]+", value.lower()))
+    return bool(words & FOOD_CATEGORY_TERMS)
+
+
+def _normalize_place_intent(intent: WaypointIntent) -> tuple[WaypointIntent, str | None]:
+    included_type = google_place_type_for_category(intent.query)
+    if intent.resolution == "food_choice":
+        return intent, None
+
+    if included_type:
+        mode = "nearest" if intent.selectionMode == "nearest" else "choice"
+        return intent.model_copy(update={"resolution": "category", "selectionMode": mode}), included_type
+
+    if intent.resolution == "category" and _is_food_category_query(intent.query):
+        return intent, "restaurant"
+
+    if intent.resolution == "category":
+        return intent.model_copy(update={"resolution": "specific", "selectionMode": "auto"}), None
+
+    return intent, None
+
+
+def _candidate_is_confident(query: str, candidate: Candidate) -> bool:
+    ignored = {"the", "a", "an", "near", "nearest", "closest", "branch"}
+    query_tokens = {
+        token
+        for token in re.findall(r"[a-z0-9]+", query.lower())
+        if token not in ignored and len(token) > 2
+    }
+    name_tokens = set(re.findall(r"[a-z0-9]+", candidate.name.lower()))
+    meaningful = query_tokens & name_tokens
+    return bool(query_tokens) and len(meaningful) >= min(2, len(query_tokens))
+
+
+def _candidate_text_score(query: str, candidate: Candidate) -> float:
+    query_tokens = set(re.findall(r"[a-z0-9]+", query.lower()))
+    name_tokens = set(re.findall(r"[a-z0-9]+", candidate.name.lower()))
+    if not query_tokens:
+        return 0.0
+    return len(query_tokens & name_tokens) / len(query_tokens)
 
 
 async def _parse_with_deepseek(
-    instruction: str,
-    location_tags: dict[str, str],
-    user_settings: dict[str, str],
-    stored_preferences: dict[str, Any],
-    deepseek_api_key: str,
-    deepseek_model: str,
-    deepseek_base_url: str,
-) -> AgentParseResult:
-    if not deepseek_api_key:
+    state: PlannerState,
+    dependencies: PlannerDependencies,
+) -> ParsedTrip:
+    if not dependencies.deepseek_api_key:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="DEEPSEEK_API_KEY is missing from .env.",
@@ -440,106 +295,709 @@ async def _parse_with_deepseek(
     except ImportError as exc:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="LangChain OpenAI dependencies are not installed. Run pip install -r backend/requirements.txt.",
+            detail="LangChain OpenAI dependencies are not installed.",
         ) from exc
 
     model = ChatOpenAI(
-        model=deepseek_model,
-        api_key=deepseek_api_key,
-        base_url=deepseek_base_url,
+        model=dependencies.deepseek_model,
+        api_key=dependencies.deepseek_api_key,
+        base_url=dependencies.deepseek_base_url,
         temperature=0,
+        max_retries=1,
+    )
+    json_model = model.bind(response_format={"type": "json_object"})
+    schema = json.dumps(ParsedTrip.model_json_schema(), indent=2)
+    prompt = f"""
+You parse driving itineraries in Malaysia. Return one raw JSON object matching this exact JSON Schema:
+{schema}
+
+Today is {datetime.now(MALAYSIA_TZ).date().isoformat()} and the timezone is Asia/Kuala_Lumpur.
+
+Context:
+- home: {state['location_tags'].get('home') or '(not set)'}
+- work: {state['location_tags'].get('work') or '(not set)'}
+- current location: {state['user_settings'].get('currentLocation') or '(not set)'}
+- stored route preferences: {json.dumps(state['stored_preferences'])}
+
+Rules:
+- Preserve chronological waypoint order and include the final destination as the last waypoint.
+- Put the starting point only in origin. Never repeat the origin as the first waypoint.
+- Use resolution=food_choice for vague meal requests such as lunch, dinner, hungry, or find food.
+- Use resolution=category and selectionMode=choice for cuisine/category requests where the user should choose a business.
+- Use selectionMode=nearest only when nearest/closest is explicit; otherwise use auto for a specifically named place.
+- Put the requested area or landmark in nearbyReference for phrases such as near KLCC or around a named landmark.
+- Keep aliases such as home, work, and current location as written; deterministic nodes resolve them.
+- Set flexible=true only when the user permits reordering. Preserve explicit before/after constraints.
+- Convert times to HH:MM Malaysia time. departureTime is the requested start time; arriveBy and departAfter belong to waypoints.
+- Store visit duration in dwellMinutes.
+- Route preference fields are null when unspecified, so explicit false can override a stored true value.
+- If a named destination is genuinely ambiguous, set one concise clarificationQuestion.
+- A vague food request inside a larger itinerary remains a waypoint at the position where the meal occurs.
+
+Examples:
+- "nearest McDonald's from home" => specific waypoint, selectionMode nearest.
+- "find halal Japanese lunch near KLCC" => category waypoint, selectionMode choice, nearbyReference KLCC.
+- "grab lunch" => food_choice waypoint, selectionMode choice.
+
+Instruction:
+{state['instruction']}
+"""
+    last_error: Exception | None = None
+    for _ in range(2):
+        try:
+            result = await json_model.ainvoke(prompt)
+            content = str(result.content).strip()
+            if content.startswith("```"):
+                content = re.sub(r"^```(?:json)?\s*", "", content, flags=re.IGNORECASE)
+                content = re.sub(r"\s*```$", "", content)
+            payload = json.loads(content)
+            return ParsedTrip.model_validate(_normalize_model_payload(payload, state["instruction"]))
+        except (json.JSONDecodeError, ValidationError, ValueError, TypeError) as exc:
+            last_error = exc
+        except Exception as exc:
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail=f"DeepSeek could not parse the trip instruction: {exc}",
+            ) from exc
+    raise HTTPException(
+        status_code=status.HTTP_502_BAD_GATEWAY,
+        detail=f"DeepSeek returned an invalid trip plan: {last_error}",
     )
 
-    prompt = f"""
-You are a trip-planning parser for a driving app in Malaysia.
-Return exactly one raw JSON object. Do not use markdown fences.
 
-Schema:
-{{
-  "origin": "string",
-  "stops": ["string"],
-  "destination": "string",
-  "preferences": {{
-    "avoidHighways": false,
-    "avoidTolls": false,
-    "fastestRoute": false,
-    "timeWindows": {{}}
-  }},
-  "clarificationRequired": false,
-  "clarificationMessage": null,
-  "choiceRequired": false,
-  "choiceType": null,
-  "choiceQuery": "",
-  "choiceReference": "",
-  "message": null
-}}
+def _normalize_model_payload(payload: Any, instruction: str) -> dict[str, Any]:
+    """Accept minor DeepSeek schema drift while preserving typed graph state."""
+    if not isinstance(payload, dict):
+        raise ValueError("Trip parser output must be a JSON object.")
 
-Saved location tag context:
-- home: {location_tags.get("home") or "(not set)"}
-- work: {location_tags.get("work") or "(not set)"}
+    normalized = dict(payload)
+    if "preferences" not in normalized:
+        normalized["preferences"] = normalized.get("routePreferences") or {}
+    if "optimizeFlexible" not in normalized and isinstance(normalized.get("flexible"), bool):
+        normalized["optimizeFlexible"] = normalized["flexible"]
 
-Settings context:
-- currentLocation: {user_settings.get("currentLocation") or "(not set)"}
+    waypoints: list[dict[str, Any]] = []
+    for raw in normalized.get("waypoints") or []:
+        if not isinstance(raw, dict):
+            continue
+        item = dict(raw)
+        item["query"] = _clean(str(item.get("query") or item.get("name") or item.get("alias") or ""))
+        raw_resolution = str(item.get("resolution") or item.get("type") or "specific").lower()
+        item["resolution"] = {
+            "exact": "specific",
+            "named": "specific",
+            "location": "specific",
+            "place": "specific",
+            "food": "food_choice",
+            "meal": "food_choice",
+        }.get(raw_resolution, raw_resolution)
+        if item["resolution"] not in {"specific", "category", "food_choice"}:
+            item["resolution"] = "specific"
+        if item.get("dwellMinutes") is None:
+            item["dwellMinutes"] = 0
+        if item.get("maxDriveMinutes") is None and item.get("maxDetourMinutes") is not None:
+            item["maxDriveMinutes"] = item["maxDetourMinutes"]
+        if item.get("flexible") is None:
+            item["flexible"] = False
+        if not item.get("selectionMode"):
+            item["selectionMode"] = "choice" if item["resolution"] in {"category", "food_choice"} else "auto"
+        if item["resolution"] == "food_choice":
+            meal_words = {"food", "eat", "breakfast", "lunch", "dinner", "supper", "hungry", "place", "spot"}
+            query_words = set(re.findall(r"[a-z]+", item["query"].lower()))
+            if query_words - meal_words:
+                item["resolution"] = "category"
+                item["selectionMode"] = "choice"
+        waypoints.append(item)
 
-Stored route preferences:
-{stored_preferences}
+    if not normalized.get("origin") and waypoints:
+        starts_with_origin = bool(
+            re.search(r"^\s*(?:leave|from|start(?:ing)?\s+(?:at|from))\b", instruction, re.IGNORECASE)
+        )
+        first = waypoints[0]
+        alias = _clean(str((normalized.get("waypoints") or [{}])[0].get("alias") or ""))
+        if starts_with_origin or alias.lower() in CURRENT_LOCATION_ALIASES or _tag_name(alias):
+            normalized["origin"] = alias or first["query"]
+            waypoints.pop(0)
 
-Instructions:
-- First silently rewrite the user instruction into clear trip-planning language before filling the JSON.
-- Correct obvious typos and informal phrasing, for example "neaby" -> "nearby", "mcdonald" -> "McDonald's", "my house" -> "home", and "my office" -> "work".
-- Normalize flexible natural language into origin, ordered stops, destination, and preferences.
-- Understand aliases: home/my home/house, work/office/my office/workplace.
-- If a saved tag is used and available, use the saved address.
-- If a saved tag is referenced but missing, set clarificationRequired true and ask for that address.
-- Do not ask which branch for chain or category names when the user says nearby, neaby, nearest, closest, near me, or near another place.
-- Treat "neaby" as a typo for "nearby".
-- Preserve nearby place lookups as strings like "Burger King nearby", "nearest Starbucks", "McDonald's near home", or "McDonald neaby my house" so backend tools can resolve them.
-- Preserve chronological order for pickups, dropoffs, errands, sightseeing, meals, and time windows.
-- Extract avoidHighways, avoidTolls, fastestRoute, and time windows.
-- If the origin is omitted but the instruction starts from home and home is saved, use home.
-- If the origin is omitted without a home reference, leave origin as an empty string so backend default origin rules can use currentLocation, then home.
-- If the final destination is omitted but the user says return home, use home.
-- For vague meal or hunger requests like "bring me to dinner", "I want to eat breakfast", "eat food", "find me a lunch spot", or "I'm hungry", set choiceRequired true, choiceType "food", and message like "What would you like for lunch?". Do not set a destination.
-- If a vague meal request is embedded in a larger itinerary, still fill origin, stops, and destination for the non-meal route context, then set choiceRequired true for the meal choice.
-- Example: "I want to go from home to KLCC then go Everynation Puchong, find me a lunch spot near Everynation too" should keep origin home, include KLCC as a stop, destination Everynation Puchong, set choiceRequired true, choiceType "food", message "What would you like for lunch?", and choiceReference "Everynation".
-- If a choice request includes a nearby reference like "near Everynation", "around KLCC", or "near my office", put that reference in choiceReference so backend tools search near that place instead of Current Location/Home.
-- Do not treat concrete place categories like cafe, coffee shop, restaurant, mall, hospital, or clinic as vague meals.
-- Do not set choiceRequired for specific food/place requests like "nearest McDonald's", "Burger King nearby", "Japanese food near me", or "Starbucks near KL Sentral"; keep those as routable nearby place strings.
-- For category requests like "bring me to cafe", "nearest restaurant", "nearest mall", "nearest hospital", or "nearest clinic", set choiceRequired true, choiceType "location", choiceQuery to the category, and message like "Choose a nearby cafe.".
-- If an important location is ambiguous, set clarificationRequired true with one short question.
+    normalized["waypoints"] = waypoints
+    return normalized
 
-User instruction:
-{instruction}
-"""
+
+def build_trip_graph(dependencies: PlannerDependencies, checkpointer: Any):
     try:
-        result = await model.ainvoke(prompt)
-    except Exception as exc:
+        from langgraph.graph import END, START, StateGraph
+        from langgraph.types import Command, Send, interrupt
+    except ImportError as exc:
         raise HTTPException(
-            status_code=status.HTTP_502_BAD_GATEWAY,
-            detail=f"DeepSeek could not parse the trip instruction: {exc}",
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="LangGraph is not installed.",
         ) from exc
 
-    try:
-        parsed_content = _extract_json_object(str(result.content))
-        parsed_result = AgentParseResult.model_validate(parsed_content)
-        category_choice = _direct_choice_intent(instruction)
-        if (
-            parsed_result.choiceRequired
-            and parsed_result.choiceType == "food"
-            and _contains_concrete_place_category(instruction)
-            and category_choice
-        ):
-            return category_choice
-        if parsed_result.clarificationRequired:
-            fallback_result = _fallback_nearby_parse(instruction)
-            if fallback_result:
-                return fallback_result
-        return parsed_result
-    except (ValidationError, json.JSONDecodeError, ValueError) as exc:
+    async def context_loader(state: PlannerState) -> dict[str, Any]:
+        return {
+            "original_instruction": state.get("original_instruction") or state["instruction"],
+            "revision": state.get("revision", 0),
+            "pending_question": None,
+            "schedule_error": None,
+        }
+
+    async def intent_parser(state: PlannerState) -> dict[str, Any]:
+        parsed = await _parse_with_deepseek(state, dependencies)
+        return {
+            "parsed": parsed,
+            "revision": state.get("revision", 0) + 1,
+            "pending_question": None,
+            "schedule_error": None,
+        }
+
+    async def ambiguity_checker(state: PlannerState) -> dict[str, Any]:
+        parsed = state["parsed"]
+        question = parsed.clarificationQuestion
+        if not question and not parsed.waypoints:
+            question = "What is your final destination?"
+        return {"pending_question": question}
+
+    def after_ambiguity(state: PlannerState) -> str:
+        return "clarification_gate" if state.get("pending_question") else "tag_resolver"
+
+    async def clarification_gate(state: PlannerState):
+        answer = interrupt(
+            {
+                "kind": "clarification",
+                "prompt": state.get("pending_question") or "Please clarify your trip.",
+            }
+        )
+        answer_text = answer.get("answer", "") if isinstance(answer, dict) else str(answer)
+        instruction = (
+            f"{state.get('original_instruction') or state['instruction']}\n"
+            f"Clarification answer: {_clean(answer_text)}"
+        )
+        return Command(
+            update={"instruction": instruction, "pending_question": None},
+            goto="intent_parser",
+        )
+
+    async def tag_resolver(state: PlannerState) -> dict[str, Any]:
+        parsed = state["parsed"]
+        if parsed.origin:
+            origin, question = _resolve_context_value(
+                parsed.origin,
+                state["location_tags"],
+                state["user_settings"],
+            )
+        else:
+            origin, question = _default_origin(
+                state["location_tags"],
+                state["user_settings"],
+            )
+        return {"resolved_origin": origin, "pending_question": question}
+
+    def after_tags(state: PlannerState) -> str:
+        return "clarification_gate" if state.get("pending_question") else "preference_resolver"
+
+    async def preference_resolver(state: PlannerState) -> dict[str, Any]:
+        return {
+            "preferences": _merge_preferences(
+                state["parsed"].preferences,
+                state["stored_preferences"],
+            )
+        }
+
+    async def waypoint_dispatch(state: PlannerState) -> dict[str, Any]:
+        return {}
+
+    def dispatch_waypoints(state: PlannerState):
+        parsed = state["parsed"]
+        if not parsed.waypoints:
+            return "candidate_ranker"
+        return [
+            Send(
+                "place_resolver",
+                {
+                    **state,
+                    "waypoint_task": (index, waypoint),
+                },
+            )
+            for index, waypoint in enumerate(parsed.waypoints)
+        ]
+
+    async def place_resolver(state: dict[str, Any]) -> dict[str, Any]:
+        index, intent = state["waypoint_task"]
+        intent, included_type = _normalize_place_intent(intent)
+        reference = intent.nearbyReference or state["resolved_origin"]
+        reference, reference_question = _resolve_context_value(
+            reference,
+            state["location_tags"],
+            state["user_settings"],
+        )
+        if reference_question:
+            return {"pending_question": reference_question}
+
+        direct, direct_question = _resolve_context_value(
+            intent.query,
+            state["location_tags"],
+            state["user_settings"],
+        )
+        if direct_question:
+            return {"pending_question": direct_question}
+
+        if _tag_name(intent.query) or intent.query.lower() in CURRENT_LOCATION_ALIASES:
+            selected = Candidate(name=intent.query.title(), address=direct)
+            item = ResolvedWaypoint(
+                revision=state["revision"],
+                index=index,
+                intent=intent,
+                referenceAddress=reference,
+                candidates=[selected],
+                selected=selected,
+            )
+            return {"resolved_waypoints": [item]}
+
+        if intent.resolution == "food_choice":
+            item = ResolvedWaypoint(
+                revision=state["revision"],
+                index=index,
+                intent=intent,
+                referenceAddress=reference,
+            )
+            return {"resolved_waypoints": [item]}
+
+        query = direct
+        should_search_near_reference = bool(intent.nearbyReference) or (
+            intent.selectionMode == "nearest" or intent.resolution == "category"
+        )
+        if should_search_near_reference and reference and reference.lower() not in query.lower():
+            query = f"{query} near {reference}"
+        places = await search_places(
+            text_query=query,
+            fallback_label=intent.query,
+            api_key=dependencies.google_maps_server_key,
+            max_result_count=3,
+            included_type=included_type,
+            strict_type_filtering=bool(included_type),
+        )
+        item = ResolvedWaypoint(
+            revision=state["revision"],
+            index=index,
+            intent=intent,
+            referenceAddress=reference,
+            candidates=[_candidate_from_place(place) for place in places],
+        )
+        return {"resolved_waypoints": [item]}
+
+    async def candidate_ranker(state: PlannerState) -> dict[str, Any]:
+        latest = _latest_resolved(state)
+        updates: list[ResolvedWaypoint] = []
+        for index in sorted(latest):
+            item = latest[index]
+            if item.selected or not item.candidates:
+                continue
+            if item.intent.resolution == "specific" and item.intent.selectionMode == "auto":
+                updates.append(item.model_copy(update={"selected": item.candidates[0]}))
+                continue
+            try:
+                matrix = await compute_route_matrix(
+                    origin=item.referenceAddress,
+                    destinations=[candidate.address for candidate in item.candidates],
+                    preferences=state["preferences"],
+                    api_key=dependencies.google_maps_server_key,
+                )
+            except HTTPException:
+                matrix = []
+            ranked: list[Candidate] = []
+            for candidate, route_data in zip(item.candidates, matrix, strict=False):
+                seconds, distance = route_data
+                ranked.append(candidate.model_copy(update={
+                    "driveSeconds": seconds,
+                    "distanceMeters": distance,
+                }))
+            if len(ranked) < len(item.candidates):
+                ranked.extend(item.candidates[len(ranked):])
+            ranked.sort(key=lambda value: (
+                -_candidate_text_score(item.intent.query, value),
+                value.driveSeconds is None,
+                value.driveSeconds or 10**9,
+                -(value.rating or 0),
+                -(value.userRatingCount or 0),
+            ))
+            if item.intent.maxDriveMinutes:
+                ranked = [
+                    value for value in ranked
+                    if value.driveSeconds is None
+                    or value.driveSeconds <= item.intent.maxDriveMinutes * 60
+                ]
+            selected = None
+            if len(ranked) == 1:
+                selected = ranked[0]
+            elif item.intent.selectionMode == "nearest" and ranked:
+                selected = ranked[0]
+            elif item.intent.selectionMode == "auto" and ranked and _candidate_is_confident(item.intent.query, ranked[0]):
+                selected = ranked[0]
+            updates.append(item.model_copy(update={"candidates": ranked, "selected": selected}))
+        return {"resolved_waypoints": updates}
+
+    async def choice_gate(state: PlannerState):
+        latest = _latest_resolved(state)
+        for index in range(len(state["parsed"].waypoints)):
+            item = latest.get(index)
+            if not item:
+                continue
+            if item.selected:
+                continue
+            if not item.candidates and item.intent.resolution != "food_choice":
+                return Command(
+                    update={
+                        "pending_question": (
+                            f"I couldn't find {item.intent.query} near {item.referenceAddress}. "
+                            "What alternative should I use?"
+                        )
+                    },
+                    goto="clarification_gate",
+                )
+
+            prompt = (
+                "What would you like to eat?"
+                if item.intent.resolution == "food_choice"
+                else f"Choose {item.intent.query}."
+            )
+            selection = interrupt(
+                {
+                    "kind": "choice",
+                    "prompt": prompt,
+                    "choiceType": "food" if item.intent.resolution == "food_choice" else "location",
+                    "choiceQuery": "" if item.intent.resolution == "food_choice" else item.intent.query,
+                    "choiceReference": item.intent.nearbyReference,
+                    "referenceOrigin": item.referenceAddress,
+                    "choices": [_place_result(candidate).model_dump() for candidate in item.candidates],
+                }
+            )
+            selected_data = selection.get("selectedPlace") if isinstance(selection, dict) else None
+            if not selected_data:
+                return Command(
+                    update={"pending_question": "Please choose a place to continue."},
+                    goto="clarification_gate",
+                )
+            selected_place = PlaceResult.model_validate(selected_data)
+            selected = Candidate(
+                name=selected_place.name,
+                address=selected_place.address,
+                placeId=selected_place.placeId,
+                latitude=selected_place.latitude,
+                longitude=selected_place.longitude,
+                rating=selected_place.rating,
+                userRatingCount=selected_place.userRatingCount,
+                googleMapsUri=selected_place.googleMapsUri,
+            )
+            resolved = item.model_copy(update={"selected": selected})
+            return Command(
+                update={"resolved_waypoints": [resolved]},
+                goto="candidate_ranker",
+            )
+        return Command(goto="route_planner")
+
+    async def route_planner(state: PlannerState) -> dict[str, Any]:
+        latest = _latest_resolved(state)
+        selected = [latest[index] for index in sorted(latest)]
+        addresses = [item.selected.address for item in selected if item.selected]
+        if len(addresses) != len(state["parsed"].waypoints):
+            return {"pending_question": "Please resolve every stop before routing."}
+
+        destination = addresses[-1]
+        stops = addresses[:-1]
+        preferences = state["preferences"]
+        optimize = (
+            state["parsed"].optimizeFlexible
+            and len(stops) > 1
+            and all(item.intent.flexible for item in selected[:-1])
+        )
+        route_response = await compute_multi_stop_route(
+            origin=state["resolved_origin"],
+            stops=stops,
+            destination=destination,
+            stop_place_ids=[item.selected.placeId for item in selected[:-1]],
+            destination_place_id=selected[-1].selected.placeId,
+            preferences=preferences,
+            api_key=dependencies.google_maps_server_key,
+            optimize_waypoints=optimize,
+        )
+        planned_order = list(range(len(selected)))
+        if optimize and route_response.optimizedWaypointOrder:
+            stop_order = [
+                index
+                for index in route_response.optimizedWaypointOrder
+                if 0 <= index < len(stops)
+            ]
+            if len(stop_order) == len(stops):
+                planned_order = [*stop_order, len(selected) - 1]
+                stops = [addresses[index] for index in stop_order]
+        plan = NormalizedTripPlan(
+            origin=state["resolved_origin"],
+            stops=stops,
+            destination=destination,
+            preferences=preferences,
+        )
+        return {
+            "normalized_plan": plan,
+            "route_response": route_response,
+            "planned_order": planned_order,
+        }
+
+    def after_route(state: PlannerState) -> str:
+        return "clarification_gate" if state.get("pending_question") else "route_validator"
+
+    async def route_validator(state: PlannerState) -> dict[str, Any]:
+        parsed = state["parsed"]
+        now = datetime.now(MALAYSIA_TZ)
+        requested = state.get("requested_departure_time")
+        departure: datetime
+        if requested:
+            departure = datetime.fromisoformat(requested)
+            departure = departure.replace(tzinfo=MALAYSIA_TZ) if departure.tzinfo is None else departure.astimezone(MALAYSIA_TZ)
+        else:
+            parsed_time = _parse_clock(parsed.departureTime)
+            departure = datetime.combine(now.date(), parsed_time, MALAYSIA_TZ) if parsed_time else now
+
+        latest = _latest_resolved(state)
+        leg_durations = list(state["route_response"].legDurations)
+        if len(leg_durations) < len(parsed.waypoints):
+            total = _duration_seconds(state["route_response"].duration)
+            average = total // max(1, len(parsed.waypoints))
+            leg_durations = [f"{average}s"] * len(parsed.waypoints)
+
+        waypoints = [
+            TripWaypoint(
+                role="origin",
+                label="Start",
+                address=state["resolved_origin"],
+                arrivalTime=departure.isoformat(),
+                departureTime=departure.isoformat(),
+            )
+        ]
+        cursor = departure
+        schedule_error = None
+        planned_order = state.get("planned_order") or list(range(len(parsed.waypoints)))
+        for route_index, intent_index in enumerate(planned_order):
+            intent = parsed.waypoints[intent_index]
+            cursor += timedelta(seconds=_duration_seconds(leg_durations[route_index]))
+            item = latest[intent_index]
+            candidate = item.selected
+            deadline = _parse_clock(intent.arriveBy)
+            status_value: Literal["none", "met", "missed"] = "none"
+            if deadline:
+                deadline_at = datetime.combine(cursor.date(), deadline, MALAYSIA_TZ)
+                status_value = "met" if cursor <= deadline_at else "missed"
+                if status_value == "missed" and not schedule_error:
+                    schedule_error = (
+                        f"The earliest estimated arrival at {candidate.name} is "
+                        f"{cursor.strftime('%I:%M %p').lstrip('0')}, "
+                        f"after the requested {deadline_at.strftime('%H:%M')}. "
+                        "Which time, stop, or route preference should I change?"
+                    )
+            arrival = cursor
+            depart_after = _parse_clock(intent.departAfter)
+            if depart_after:
+                required_departure = datetime.combine(cursor.date(), depart_after, MALAYSIA_TZ)
+                cursor = max(cursor, required_departure)
+            cursor += timedelta(minutes=intent.dwellMinutes)
+            role: Literal["stop", "destination"] = "destination" if route_index == len(planned_order) - 1 else "stop"
+            waypoints.append(
+                TripWaypoint(
+                    role=role,
+                    label=candidate.name,
+                    address=candidate.address,
+                    placeId=candidate.placeId,
+                    rating=candidate.rating,
+                    googleMapsUri=candidate.googleMapsUri,
+                    arrivalTime=arrival.isoformat(),
+                    departureTime=cursor.isoformat(),
+                    constraintStatus=status_value,
+                )
+            )
+        return {
+            "waypoints": waypoints,
+            "departure_datetime": departure.isoformat(),
+            "schedule_error": schedule_error,
+            "pending_question": schedule_error,
+        }
+
+    def after_validation(state: PlannerState) -> str:
+        return "clarification_gate" if state.get("schedule_error") else "response_builder"
+
+    async def response_builder(state: PlannerState) -> dict[str, Any]:
+        update_preferences({
+            "avoidHighways": state["preferences"].avoidHighways,
+            "avoidTolls": state["preferences"].avoidTolls,
+            "fastestRoute": state["preferences"].fastestRoute,
+        })
+        return {}
+
+    graph = StateGraph(PlannerState)
+    graph.add_node("context_loader", context_loader)
+    graph.add_node("intent_parser", intent_parser)
+    graph.add_node("ambiguity_checker", ambiguity_checker)
+    graph.add_node(
+        "clarification_gate",
+        clarification_gate,
+        destinations=("intent_parser",),
+    )
+    graph.add_node("tag_resolver", tag_resolver)
+    graph.add_node("preference_resolver", preference_resolver)
+    graph.add_node("waypoint_dispatch", waypoint_dispatch)
+    graph.add_node("place_resolver", place_resolver)
+    graph.add_node("candidate_ranker", candidate_ranker)
+    graph.add_node(
+        "choice_gate",
+        choice_gate,
+        destinations=("candidate_ranker", "clarification_gate", "route_planner"),
+    )
+    graph.add_node("route_planner", route_planner)
+    graph.add_node("route_validator", route_validator)
+    graph.add_node("response_builder", response_builder)
+
+    graph.add_edge(START, "context_loader")
+    graph.add_edge("context_loader", "intent_parser")
+    graph.add_edge("intent_parser", "ambiguity_checker")
+    graph.add_conditional_edges(
+        "ambiguity_checker",
+        after_ambiguity,
+        {
+            "clarification_gate": "clarification_gate",
+            "tag_resolver": "tag_resolver",
+        },
+    )
+    graph.add_conditional_edges(
+        "tag_resolver",
+        after_tags,
+        {
+            "clarification_gate": "clarification_gate",
+            "preference_resolver": "preference_resolver",
+        },
+    )
+    graph.add_edge("preference_resolver", "waypoint_dispatch")
+    graph.add_conditional_edges(
+        "waypoint_dispatch",
+        dispatch_waypoints,
+        {
+            "place_resolver": "place_resolver",
+            "candidate_ranker": "candidate_ranker",
+        },
+    )
+    graph.add_edge("place_resolver", "candidate_ranker")
+    graph.add_edge("candidate_ranker", "choice_gate")
+    graph.add_conditional_edges(
+        "route_planner",
+        after_route,
+        {
+            "clarification_gate": "clarification_gate",
+            "route_validator": "route_validator",
+        },
+    )
+    graph.add_conditional_edges(
+        "route_validator",
+        after_validation,
+        {
+            "clarification_gate": "clarification_gate",
+            "response_builder": "response_builder",
+        },
+    )
+    graph.add_edge("response_builder", END)
+    return graph.compile(checkpointer=checkpointer)
+
+
+class _GraphRuntime:
+    def __init__(self) -> None:
+        self._graph: Any = None
+        self._checkpointer_context: Any = None
+        self._checkpoint_connection: Any = None
+        self._lock = asyncio.Lock()
+
+    async def get(self, dependencies: PlannerDependencies):
+        if self._graph is not None:
+            return self._graph
+        async with self._lock:
+            if self._graph is not None:
+                return self._graph
+            CHECKPOINT_PATH.parent.mkdir(parents=True, exist_ok=True)
+            try:
+                import aiosqlite
+                from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
+                from langgraph.checkpoint.serde.jsonplus import JsonPlusSerializer
+
+                self._checkpoint_connection = await aiosqlite.connect(str(CHECKPOINT_PATH))
+                serializer = JsonPlusSerializer(
+                    allowed_msgpack_modules=[
+                        (__name__, "ParsedPreferences"),
+                        (__name__, "WaypointIntent"),
+                        (__name__, "ParsedTrip"),
+                        (__name__, "Candidate"),
+                        (__name__, "ResolvedWaypoint"),
+                        ("backend.app.schemas.trip_planner", "TripPreferences"),
+                        ("backend.app.schemas.trip_planner", "NormalizedTripPlan"),
+                        ("backend.app.schemas.trip_planner", "TripWaypoint"),
+                        ("backend.app.schemas.routes", "RouteResponse"),
+                        ("backend.app.schemas.routes", "RouteSummary"),
+                    ]
+                )
+                checkpointer = AsyncSqliteSaver(
+                    self._checkpoint_connection,
+                    serde=serializer,
+                )
+            except ImportError:
+                from langgraph.checkpoint.memory import InMemorySaver
+
+                checkpointer = InMemorySaver()
+            self._graph = build_trip_graph(dependencies, checkpointer)
+            return self._graph
+
+
+_RUNTIME = _GraphRuntime()
+
+
+def _interrupt_payload(final_state: dict[str, Any]) -> dict[str, Any] | None:
+    interrupts = final_state.get("__interrupt__") or []
+    if not interrupts:
+        return None
+    value = getattr(interrupts[0], "value", interrupts[0])
+    return value if isinstance(value, dict) else {"kind": "clarification", "prompt": str(value)}
+
+
+def _response_from_state(final_state: dict[str, Any], thread_id: str) -> TripPlannerResponse:
+    payload = _interrupt_payload(final_state)
+    if payload:
+        kind = payload.get("kind")
+        choices = [PlaceResult.model_validate(choice) for choice in payload.get("choices", [])]
+        prompt = payload.get("prompt") or "More information is needed."
+        return TripPlannerResponse(
+            status="needs_choice" if kind == "choice" else "needs_clarification",
+            threadId=thread_id,
+            prompt=prompt,
+            choices=choices,
+            clarificationRequired=kind != "choice",
+            clarificationMessage=prompt if kind != "choice" else None,
+            choiceRequired=kind == "choice",
+            choiceType=payload.get("choiceType"),
+            choiceQuery=payload.get("choiceQuery", ""),
+            choiceReference=payload.get("choiceReference", ""),
+            referenceOrigin=payload.get("referenceOrigin", ""),
+            message=prompt,
+        )
+
+    if "route_response" not in final_state:
         raise HTTPException(
-            status_code=status.HTTP_502_BAD_GATEWAY,
-            detail=f"DeepSeek returned an invalid trip plan: {exc}",
-        ) from exc
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="This trip-planning session expired. Start the trip again.",
+        )
+    route_response = final_state["route_response"]
+    return TripPlannerResponse(
+        status="completed",
+        threadId=thread_id,
+        normalizedPlan=final_state["normalized_plan"],
+        waypoints=final_state["waypoints"],
+        duration=route_response.duration,
+        distanceMeters=route_response.distanceMeters,
+        encodedPolyline=route_response.encodedPolyline,
+        summary=route_response.summary,
+    )
 
 
 async def plan_trip(
@@ -550,345 +1008,69 @@ async def plan_trip(
     deepseek_api_key: str,
     deepseek_model: str,
     deepseek_base_url: str,
+    thread_id: str | None = None,
+    departure_time: datetime | None = None,
 ) -> TripPlannerResponse:
-    try:
-        from langgraph.graph import END, StateGraph
-    except ImportError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="LangGraph is not installed. Run pip install -r backend/requirements.txt.",
-        ) from exc
-
-    async def parse_node(state: PlannerState) -> PlannerState:
-        direct_choice = _direct_choice_intent(state["instruction"])
-        if direct_choice and not _has_itinerary_context(state["instruction"]):
-            return {"parsed": direct_choice}
-
-        parsed = await _parse_with_deepseek(
-            instruction=state["instruction"],
-            location_tags=state["location_tags"],
-            user_settings=state["user_settings"],
-            stored_preferences=state["stored_preferences"],
-            deepseek_api_key=deepseek_api_key,
-            deepseek_model=deepseek_model,
-            deepseek_base_url=deepseek_base_url,
-        )
-        return {"parsed": parsed}
-
-    async def normalize_node(state: PlannerState) -> PlannerState:
-        parsed = state["parsed"]
-        if parsed.clarificationRequired:
-            return {"clarification_message": parsed.clarificationMessage}
-
-        if parsed.choiceRequired:
-            reference_origin, reference_clarification = await _choice_reference_origin(
-                reference=parsed.choiceReference,
-                user_settings=state["user_settings"],
-                location_tags=state["location_tags"],
-                google_maps_server_key=google_maps_server_key,
-            )
-            if reference_clarification:
-                return {"clarification_message": reference_clarification}
-
-            plan: NormalizedTripPlan | None = None
-            waypoints: list[TripWaypoint] = []
-            if parsed.origin or parsed.stops or parsed.destination:
-                origin, missing_origin = _resolve_origin_value(
-                    parsed.origin,
-                    state["location_tags"],
-                    state["user_settings"],
-                )
-                if missing_origin:
-                    if missing_origin == "currentLocation":
-                        return {
-                            "clarification_message": (
-                                "Please set Current Location in Settings first."
-                            )
-                        }
-                    return {
-                        "clarification_message": (
-                            f"Please save your {missing_origin.title()} address with Add Tags first."
-                        )
-                    }
-
-                if not origin:
-                    origin, default_origin_clarification = _default_origin(
-                        user_settings=state["user_settings"],
-                        location_tags=state["location_tags"],
-                    )
-                    if default_origin_clarification:
-                        return {"clarification_message": default_origin_clarification}
-
-                stops: list[str] = []
-                stop_labels: list[str] = []
-                previous_waypoint = origin
-                for stop in parsed.stops:
-                    resolved_stop, missing_stop = _resolve_tag_value(
-                        stop,
-                        state["location_tags"],
-                    )
-                    if missing_stop:
-                        return {
-                            "clarification_message": (
-                                f"Please save your {missing_stop.title()} address with Add Tags first."
-                            )
-                        }
-
-                    stop_address, stop_label, stop_clarification = await _resolve_nearby_waypoint(
-                        value=resolved_stop,
-                        default_reference=previous_waypoint,
-                        location_tags=state["location_tags"],
-                        google_maps_server_key=google_maps_server_key,
-                    )
-                    if stop_clarification:
-                        return {"clarification_message": stop_clarification}
-
-                    stops.append(stop_address)
-                    stop_labels.append(stop_label)
-                    previous_waypoint = stop_address
-
-                destination, missing_destination = _resolve_tag_value(
-                    parsed.destination,
-                    state["location_tags"],
-                )
-                if missing_destination:
-                    return {
-                        "clarification_message": (
-                            f"Please save your {missing_destination.title()} address with Add Tags first."
-                        )
-                    }
-
-                if destination:
-                    destination, destination_label, destination_clarification = await _resolve_nearby_waypoint(
-                        value=destination,
-                        default_reference=origin,
-                        location_tags=state["location_tags"],
-                        google_maps_server_key=google_maps_server_key,
-                    )
-                    if destination_clarification:
-                        return {"clarification_message": destination_clarification}
-
-                    preferences = _merge_preferences(
-                        parsed_preferences=parsed.preferences,
-                        stored_preferences=state["stored_preferences"],
-                    )
-                    plan = NormalizedTripPlan(
-                        origin=origin,
-                        stops=stops,
-                        destination=destination,
-                        preferences=preferences,
-                    )
-                    waypoints = [
-                        TripWaypoint(
-                            role="origin",
-                            label=_waypoint_label(origin, state["location_tags"]),
-                            address=origin,
-                        )
-                    ]
-                    waypoints.extend(
-                        TripWaypoint(role="stop", label=label, address=stop)
-                        for label, stop in zip(stop_labels, stops, strict=False)
-                    )
-                    waypoints.append(
-                        TripWaypoint(
-                            role="destination",
-                            label=destination_label,
-                            address=destination,
-                        )
-                    )
-                    waypoints = await _enrich_waypoint_metadata(
-                        waypoints=waypoints,
-                        google_maps_server_key=google_maps_server_key,
-                    )
-
-            return {
-                "choice_response": TripPlannerResponse(
-                    normalizedPlan=plan,
-                    waypoints=waypoints,
-                    choiceRequired=True,
-                    choiceType=parsed.choiceType if parsed.choiceType in {"food", "location"} else "food",
-                    choiceQuery=parsed.choiceQuery,
-                    choiceReference=parsed.choiceReference,
-                    message=parsed.message or "What would you like?",
-                    referenceOrigin=reference_origin,
-                )
-            }
-
-        origin, missing_origin = _resolve_origin_value(
-            parsed.origin,
-            state["location_tags"],
-            state["user_settings"],
-        )
-        if missing_origin:
-            if missing_origin == "currentLocation":
-                return {
-                    "clarification_message": (
-                        "Please set Current Location in Settings first."
-                    )
-                }
-            return {
-                "clarification_message": (
-                    f"Please save your {missing_origin.title()} address with Add Tags first."
-                )
-            }
-
-        if not origin:
-            origin, default_origin_clarification = _default_origin(
-                user_settings=state["user_settings"],
-                location_tags=state["location_tags"],
-            )
-            if default_origin_clarification:
-                return {"clarification_message": default_origin_clarification}
-
-        stops: list[str] = []
-        stop_labels: list[str] = []
-        previous_waypoint = origin
-        for stop in parsed.stops:
-            resolved_stop, missing_stop = _resolve_tag_value(stop, state["location_tags"])
-            if missing_stop:
-                return {
-                    "clarification_message": (
-                        f"Please save your {missing_stop.title()} address with Add Tags first."
-                    )
-                }
-
-            stop_address, stop_label, stop_clarification = await _resolve_nearby_waypoint(
-                value=resolved_stop,
-                default_reference=previous_waypoint,
-                location_tags=state["location_tags"],
-                google_maps_server_key=google_maps_server_key,
-            )
-            if stop_clarification:
-                return {"clarification_message": stop_clarification}
-
-            stops.append(stop_address)
-            stop_labels.append(stop_label)
-            previous_waypoint = stop_address
-
-        destination, missing_destination = _resolve_tag_value(
-            parsed.destination,
-            state["location_tags"],
-        )
-        if missing_destination:
-            return {
-                "clarification_message": (
-                    f"Please save your {missing_destination.title()} address with Add Tags first."
-                )
-            }
-
-        if not destination:
-            return {
-                "clarification_message": (
-                    "Please include a clear start point and final destination."
-                )
-            }
-
-        destination, destination_label, destination_clarification = await _resolve_nearby_waypoint(
-            value=destination,
-            default_reference=origin,
-            location_tags=state["location_tags"],
-            google_maps_server_key=google_maps_server_key,
-        )
-        if destination_clarification:
-            return {"clarification_message": destination_clarification}
-
-        if stops and stops[-1].strip().lower() == destination.strip().lower():
-            stops.pop()
-            stop_labels.pop()
-
-        preferences = _merge_preferences(
-            parsed_preferences=parsed.preferences,
-            stored_preferences=state["stored_preferences"],
-        )
-        update_preferences(preferences.model_dump())
-
-        plan = NormalizedTripPlan(
-            origin=origin,
-            stops=stops,
-            destination=destination,
-            preferences=preferences,
-        )
-        waypoints = [
-            TripWaypoint(
-                role="origin",
-                label=_waypoint_label(origin, state["location_tags"]),
-                address=origin,
-            )
-        ]
-        waypoints.extend(
-            TripWaypoint(role="stop", label=label, address=stop)
-            for label, stop in zip(stop_labels, stops, strict=False)
-        )
-        waypoints.append(
-            TripWaypoint(
-                role="destination",
-                label=destination_label,
-                address=destination,
-            )
-        )
-        waypoints = await _enrich_waypoint_metadata(
-            waypoints=waypoints,
-            google_maps_server_key=google_maps_server_key,
-        )
-
-        return {
-            "normalized_plan": plan,
-            "waypoints": waypoints,
-        }
-
-    async def route_node(state: PlannerState) -> PlannerState:
-        if state.get("clarification_message") or state.get("choice_response"):
-            return {}
-
-        plan = state["normalized_plan"]
-        route_response = await compute_multi_stop_route(
-            origin=plan.origin,
-            stops=plan.stops,
-            destination=plan.destination,
-            preferences=plan.preferences,
-            api_key=google_maps_server_key,
-            optimize_waypoints=_should_optimize_waypoints(plan),
-        )
-        return {"route_response": route_response}
-
-    graph = StateGraph(PlannerState)
-    graph.add_node("parse", parse_node)
-    graph.add_node("normalize", normalize_node)
-    graph.add_node("route", route_node)
-    graph.set_entry_point("parse")
-    graph.add_edge("parse", "normalize")
-    graph.add_edge("normalize", "route")
-    graph.add_edge("route", END)
-    app = graph.compile()
-
-    final_state = await app.ainvoke(
+    dependencies = PlannerDependencies(
+        google_maps_server_key=google_maps_server_key,
+        deepseek_api_key=deepseek_api_key,
+        deepseek_model=deepseek_model,
+        deepseek_base_url=deepseek_base_url,
+    )
+    graph = await _RUNTIME.get(dependencies)
+    resolved_thread_id = thread_id or str(uuid4())
+    final_state = await graph.ainvoke(
         {
             "instruction": instruction,
+            "original_instruction": instruction,
             "location_tags": location_tags,
             "user_settings": user_settings,
             "stored_preferences": get_preferences(),
-        }
+            "requested_departure_time": departure_time.isoformat() if departure_time else None,
+            "revision": 0,
+            "resolved_waypoints": [],
+        },
+        config={"configurable": {"thread_id": resolved_thread_id}},
     )
+    return _response_from_state(final_state, resolved_thread_id)
 
-    clarification_message = final_state.get("clarification_message")
-    if clarification_message:
-        return TripPlannerResponse(
-            clarificationRequired=True,
-            clarificationMessage=clarification_message,
+
+async def resume_trip(
+    thread_id: str,
+    answer: str,
+    selected_place: PlaceResult | None,
+    google_maps_server_key: str,
+    deepseek_api_key: str,
+    deepseek_model: str,
+    deepseek_base_url: str,
+) -> TripPlannerResponse:
+    try:
+        from langgraph.types import Command
+    except ImportError as exc:
+        raise HTTPException(status_code=500, detail="LangGraph is not installed.") from exc
+
+    dependencies = PlannerDependencies(
+        google_maps_server_key=google_maps_server_key,
+        deepseek_api_key=deepseek_api_key,
+        deepseek_model=deepseek_model,
+        deepseek_base_url=deepseek_base_url,
+    )
+    graph = await _RUNTIME.get(dependencies)
+    resume_value: dict[str, Any]
+    if selected_place:
+        resume_value = {"selectedPlace": selected_place.model_dump()}
+    else:
+        resume_value = {"answer": answer}
+    try:
+        final_state = await graph.ainvoke(
+            Command(resume=resume_value),
+            config={"configurable": {"thread_id": thread_id}},
         )
-
-    choice_response = final_state.get("choice_response")
-    if choice_response:
-        return choice_response
-
-    route_response = final_state["route_response"]
-    return TripPlannerResponse(
-        normalizedPlan=final_state["normalized_plan"],
-        waypoints=final_state["waypoints"],
-        duration=route_response.duration,
-        distanceMeters=route_response.distanceMeters,
-        encodedPolyline=route_response.encodedPolyline,
-        summary=route_response.summary,
-        clarificationRequired=False,
-        clarificationMessage=None,
-    )
+    except Exception as exc:
+        if "checkpoint" in str(exc).lower() or "thread" in str(exc).lower():
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="This trip-planning session expired. Start the trip again.",
+            ) from exc
+        raise
+    return _response_from_state(final_state, thread_id)

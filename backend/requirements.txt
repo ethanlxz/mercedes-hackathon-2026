@@ -4,6 +4,8 @@ pydantic
 pydantic-settings
 httpx
 python-dotenv
+tzdata
 langgraph
+langgraph-checkpoint-sqlite
 langchain
 langchain-openai

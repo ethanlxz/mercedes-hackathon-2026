@@ -1,3 +1,4 @@
+from datetime import datetime
 from typing import Literal
 
 from pydantic import BaseModel, Field
@@ -31,7 +32,11 @@ class PlaceSearchRequest(BaseModel):
 class PlaceResult(BaseModel):
     name: str
     address: str
+    placeId: str = ""
+    latitude: float | None = None
+    longitude: float | None = None
     rating: float | None = None
+    userRatingCount: int | None = None
     googleMapsUri: str = ""
 
 
@@ -56,10 +61,22 @@ class NormalizedTripPlan(BaseModel):
 
 class TripWaypoint(RouteWaypoint):
     role: Literal["origin", "stop", "destination"]
+    placeId: str = ""
+    arrivalTime: str | None = None
+    departureTime: str | None = None
+    constraintStatus: Literal["none", "met", "missed"] = "none"
 
 
 class TripPlannerRequest(BaseModel):
     instruction: str = Field(..., min_length=1, max_length=3000)
+    threadId: str | None = Field(default=None, max_length=100)
+    departureTime: datetime | None = None
+
+
+class TripPlannerResumeRequest(BaseModel):
+    threadId: str = Field(..., min_length=1, max_length=100)
+    answer: str = Field(default="", max_length=1000)
+    selectedPlace: PlaceResult | None = None
 
 
 class TripChoiceRouteRequest(BaseModel):
@@ -69,6 +86,15 @@ class TripChoiceRouteRequest(BaseModel):
 
 
 class TripPlannerResponse(BaseModel):
+    status: Literal[
+        "completed",
+        "needs_clarification",
+        "needs_choice",
+        "failed",
+    ] = "completed"
+    threadId: str = ""
+    prompt: str | None = None
+    choices: list[PlaceResult] = Field(default_factory=list)
     normalizedPlan: NormalizedTripPlan | None = None
     waypoints: list[TripWaypoint] = Field(default_factory=list)
     duration: str = ""

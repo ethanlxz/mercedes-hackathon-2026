@@ -14,6 +14,8 @@ const state = {
   settings: {
     currentLocation: "",
   },
+  plannerThreadId: "",
+  plannerAwaitingClarification: false,
 };
 
 const elements = {
@@ -489,6 +491,23 @@ async function requestTripPlan(instruction) {
   return payload;
 }
 
+async function resumeTripPlan(answer) {
+  const response = await fetch("/api/trip-planner/resume", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      threadId: state.plannerThreadId,
+      answer,
+    }),
+  });
+  const payload = await response.json().catch(() => ({}));
+
+  if (!response.ok) {
+    throw new Error(payload.detail || "Trip planner resume failed.");
+  }
+  return payload;
+}
+
 async function requestSettings() {
   const response = await fetch("/api/settings");
   const payload = await response.json().catch(() => ({}));
@@ -710,30 +729,46 @@ async function submitTripPlan() {
   setStatus("Planning trip...");
 
   try {
-    const plan = await requestTripPlan(instruction);
-    if (plan.choiceRequired) {
-      clearRoute();
-      if (window.TripChoiceModal) {
-        window.TripChoiceModal.open(plan);
-      } else {
-        setStatus(plan.message || "More information is needed.", true);
-      }
-      return;
-    }
-
-    if (plan.clarificationRequired) {
-      clearRoute();
-      setStatus(plan.clarificationMessage || "More information is needed.", true);
-      return;
-    }
-
-    await renderRoute(plan);
-    setStatus("Trip route ready.");
+    const plan = state.plannerAwaitingClarification && state.plannerThreadId
+      ? await resumeTripPlan(instruction)
+      : await requestTripPlan(instruction);
+    await handleTripPlanResponse(plan);
   } catch (error) {
     setStatus(error.message || "Could not plan that trip.", true);
   } finally {
     setButtonLoading(elements.tripButton, false, "Plan");
   }
+}
+
+async function handleTripPlanResponse(plan) {
+  state.plannerThreadId = plan.threadId || state.plannerThreadId;
+
+  if (plan.choiceRequired || plan.status === "needs_choice") {
+    state.plannerAwaitingClarification = false;
+    clearRoute();
+    if (window.TripChoiceModal) {
+      window.TripChoiceModal.open(plan);
+    } else {
+      setStatus(plan.message || plan.prompt || "Choose a place to continue.", true);
+    }
+    return;
+  }
+
+  if (plan.clarificationRequired || plan.status === "needs_clarification") {
+    state.plannerAwaitingClarification = true;
+    clearRoute();
+    elements.tripInstruction.value = "";
+    elements.tripInstruction.placeholder = "Type your answer to continue this trip";
+    elements.tripInstruction.focus();
+    setStatus(plan.clarificationMessage || plan.prompt || "More information is needed.", true);
+    return;
+  }
+
+  state.plannerAwaitingClarification = false;
+  state.plannerThreadId = "";
+  elements.tripInstruction.placeholder = "Start at home, pick up my friend in Subang Jaya, grab dinner, then return home avoiding tolls.";
+  await renderRoute(plan);
+  setStatus("Trip route ready.");
 }
 
 elements.form.addEventListener("submit", async (event) => {
@@ -768,6 +803,7 @@ preloadSettings();
 window.CarplayApp = {
   requestRoute,
   renderRoute,
+  handleTripPlanResponse,
   setPlannerStatus(message, isError = false) {
     state.mode = "planner";
     setStatus(message, isError);

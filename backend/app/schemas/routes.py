@@ -25,3 +25,5 @@ class RouteResponse(BaseModel):
     encodedPolyline: str
     summary: RouteSummary
     waypoints: list[RouteWaypoint] = Field(default_factory=list)
+    legDurations: list[str] = Field(default_factory=list)
+    optimizedWaypointOrder: list[int] = Field(default_factory=list)

@@ -12,6 +12,7 @@ from backend.app.schemas.trip_planner import (
     TripChoiceRouteRequest,
     TripPreferences,
     TripPlannerRequest,
+    TripPlannerResumeRequest,
     TripPlannerResponse,
     UserSettingsResponse,
 )
@@ -24,7 +25,7 @@ from backend.app.services.memory_service import (
     set_location_tag,
 )
 from backend.app.services.place_categories import google_place_type_for_category
-from backend.app.services.trip_planner_service import plan_trip
+from backend.app.services.trip_planner_service import plan_trip, resume_trip
 
 
 router = APIRouter(prefix="/api", tags=["maps"])
@@ -202,7 +203,11 @@ async def search_nearby_places(
             PlaceResult(
                 name=place.label,
                 address=place.address,
+                placeId=place.place_id,
+                latitude=place.latitude,
+                longitude=place.longitude,
                 rating=place.rating,
+                userRatingCount=place.user_rating_count,
                 googleMapsUri=place.google_maps_uri,
             )
             for place in places
@@ -252,6 +257,29 @@ async def trip_planner(
         instruction=request.instruction,
         location_tags=get_location_tags(),
         user_settings=get_user_settings(),
+        google_maps_server_key=settings.google_maps_server_key,
+        deepseek_api_key=settings.deepseek_api_key,
+        deepseek_model=settings.deepseek_model,
+        deepseek_base_url=settings.deepseek_base_url,
+        thread_id=request.threadId,
+        departure_time=request.departureTime,
+    )
+
+
+@router.post("/trip-planner/resume", response_model=TripPlannerResponse)
+async def resume_trip_planner(
+    request: TripPlannerResumeRequest,
+    settings: Settings = Depends(get_settings),
+) -> TripPlannerResponse:
+    if not request.answer.strip() and request.selectedPlace is None:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Provide a clarification answer or select a place.",
+        )
+    return await resume_trip(
+        thread_id=request.threadId,
+        answer=request.answer,
+        selected_place=request.selectedPlace,
         google_maps_server_key=settings.google_maps_server_key,
         deepseek_api_key=settings.deepseek_api_key,
         deepseek_model=settings.deepseek_model,

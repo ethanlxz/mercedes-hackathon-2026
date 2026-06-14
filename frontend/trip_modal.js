@@ -15,6 +15,7 @@ const modalState = {
   choiceQuery: "",
   choiceReference: "",
   normalizedPlan: null,
+  threadId: "",
   selectedCategory: foodCategories[0],
   recognition: null,
 };
@@ -136,24 +137,26 @@ async function chooseDestination(place) {
   setModalStatus("Routing to destination...");
 
   try {
-    const response = await fetch("/api/trip-planner/choice-route", {
+    const response = await fetch("/api/trip-planner/resume", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        normalizedPlan: modalState.normalizedPlan,
-        choiceReference: modalState.choiceReference,
+        threadId: modalState.threadId,
         selectedPlace: place,
       }),
     });
     const route = await response.json().catch(() => ({}));
 
     if (!response.ok) {
-      throw new Error(route.detail || "Could not route to that destination.");
+      throw new Error(route.detail || "Could not continue that trip.");
     }
 
-    await window.CarplayApp.renderRoute(route);
-    window.CarplayApp.setPlannerStatus(`Route ready: ${place.name}.`);
-    closeTripChoiceModal();
+    await window.CarplayApp.handleTripPlanResponse(route);
+    if (route.status === "completed") {
+      closeTripChoiceModal();
+    } else if (route.status === "needs_clarification") {
+      closeTripChoiceModal();
+    }
   } catch (error) {
     setModalStatus(error.message || "Could not route to that destination.", true);
   }
@@ -195,6 +198,7 @@ function startVoiceInput() {
 }
 
 function openTripChoiceModal(plan) {
+  modalState.threadId = plan.threadId || "";
   modalState.referenceOrigin = plan.referenceOrigin || "";
   modalState.choiceType = plan.choiceType || "food";
   modalState.choiceQuery = plan.choiceQuery || "";
@@ -210,6 +214,11 @@ function openTripChoiceModal(plan) {
   modalElements.modal.classList.remove("hidden");
   modalElements.modal.setAttribute("aria-hidden", "false");
   modalElements.input.focus();
+
+  if ((plan.choices || []).length) {
+    renderChoiceResults(plan.choices);
+    return;
+  }
 
   if (modalState.choiceType === "location" && modalState.choiceQuery) {
     modalElements.input.value = modalState.choiceQuery;
