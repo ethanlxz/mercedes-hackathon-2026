@@ -3,7 +3,7 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
-from backend.app.schemas.routes import RouteSummary, RouteWaypoint
+from backend.app.schemas.routes import RouteResponse, RouteSummary, RouteWaypoint
 
 
 class LocationTagsResponse(BaseModel):
@@ -43,6 +43,31 @@ class PlaceResult(BaseModel):
 class PlaceSearchResponse(BaseModel):
     referenceOrigin: str
     results: list[PlaceResult] = Field(default_factory=list)
+
+
+class RoadTripPlannerRequest(BaseModel):
+    origin: str = Field(..., min_length=1, max_length=500)
+    destination: str = Field(..., min_length=1, max_length=500)
+
+
+class RoadTripRecommendation(BaseModel):
+    name: str
+    address: str
+    latitude: float
+    longitude: float
+    category: str
+    section: Literal["route", "destination", "food"]
+    rating: float | None = None
+    userRatingCount: int | None = None
+    googleMapsUri: str = ""
+    explanation: str
+
+
+class RoadTripPlannerResponse(BaseModel):
+    route: RouteResponse
+    routeRecommendations: list[RoadTripRecommendation] = Field(default_factory=list)
+    destinationRecommendations: list[RoadTripRecommendation] = Field(default_factory=list)
+    foodRecommendations: list[RoadTripRecommendation] = Field(default_factory=list)
 
 
 class TripPreferences(BaseModel):

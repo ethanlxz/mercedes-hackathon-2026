@@ -9,7 +9,7 @@
       rel="stylesheet"
       href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css"
     />
-    <link rel="stylesheet" href="/static/style.css" />
+    <link rel="stylesheet" href="/static/style.css?v=road-trip-redesign-1" />
   </head>
   <body class="bg-neutral-950 text-white">
     <main class="carplay-shell">
@@ -27,10 +27,11 @@
         </div>
 
         <nav class="sidebar-actions" aria-label="Navigation tools">
-          <button id="gps-app-button" class="sidebar-action active" type="button">GPS</button>
-          <button id="planner-app-button" class="sidebar-action" type="button">Trip Planner</button>
-          <button id="edit-tags-button" class="sidebar-action" type="button">Edit Tags</button>
-          <button id="settings-app-button" class="sidebar-action" type="button">Settings</button>
+          <button id="gps-app-button" class="sidebar-action active" type="button" data-mode="simple">GPS</button>
+          <button id="planner-app-button" class="sidebar-action" type="button" data-mode="planner">Trip Planner</button>
+          <button id="road-trip-app-button" class="sidebar-action" type="button" data-mode="roadTrip">Road Trip</button>
+          <button id="edit-tags-button" class="sidebar-action" type="button" data-mode="tags">Edit Tags</button>
+          <button id="settings-app-button" class="sidebar-action" type="button" data-mode="settings">Settings</button>
         </nav>
       </aside>
 
@@ -80,6 +81,88 @@
             </div>
 
             <p id="planner-status" class="status-text planner-status" role="status"></p>
+          </div>
+
+          <div id="road-trip-panel" class="hidden">
+            <section class="road-trip-box" aria-label="Road Trip Planner">
+              <header class="road-trip-heading">
+                <div>
+                  <span class="road-trip-eyebrow">
+                    <i class="fa-solid fa-route" aria-hidden="true"></i>
+                    Road Trip
+                  </span>
+                  <strong>Build the drive</strong>
+                </div>
+                <div class="road-trip-summary" aria-hidden="true">
+                  <span>Stops</span>
+                  <span>Food</span>
+                  <span>Ideas</span>
+                </div>
+              </header>
+
+              <div class="road-trip-fields">
+                <label class="road-trip-field" for="road-trip-origin">
+                  <span>
+                    <i class="fa-solid fa-location-dot" aria-hidden="true"></i>
+                    Origin
+                  </span>
+                  <input
+                    id="road-trip-origin"
+                    class="route-input road-trip-input"
+                    type="text"
+                    placeholder="Kuala Lumpur"
+                  />
+                </label>
+
+                <label class="road-trip-field" for="road-trip-destination">
+                  <span>
+                    <i class="fa-solid fa-flag-checkered" aria-hidden="true"></i>
+                    Destination
+                  </span>
+                  <input
+                    id="road-trip-destination"
+                    class="route-input road-trip-input"
+                    type="text"
+                    placeholder="Penang"
+                  />
+                </label>
+              </div>
+
+              <button id="road-trip-button" class="go-button road-trip-button" type="button">
+                <i class="fa-solid fa-wand-magic-sparkles" aria-hidden="true"></i>
+                Plan Route
+              </button>
+
+              <p id="road-trip-status" class="status-text planner-status" role="status"></p>
+
+              <div id="road-trip-results" class="road-trip-results hidden">
+                <div class="road-trip-results-header">
+                  <span>Recommendations</span>
+                  <strong>Picked for this route</strong>
+                </div>
+                <section class="recommendation-section recommendation-section-route">
+                  <h3>
+                    <i class="fa-solid fa-map-location-dot" aria-hidden="true"></i>
+                    Along The Way
+                  </h3>
+                  <div id="route-recommendations" class="recommendation-list"></div>
+                </section>
+                <section class="recommendation-section recommendation-section-destination">
+                  <h3>
+                    <i class="fa-solid fa-mountain-sun" aria-hidden="true"></i>
+                    At The Destination
+                  </h3>
+                  <div id="destination-recommendations" class="recommendation-list"></div>
+                </section>
+                <section class="recommendation-section recommendation-section-food">
+                  <h3>
+                    <i class="fa-solid fa-utensils" aria-hidden="true"></i>
+                    Food
+                  </h3>
+                  <div id="food-recommendations" class="recommendation-list"></div>
+                </section>
+              </div>
+            </section>
           </div>
 
           <div id="tags-panel" class="hidden">
@@ -194,7 +277,7 @@
       </section>
     </main>
 
-    <script src="/static/app.js"></script>
-    <script src="/static/trip_modal.js"></script>
+    <script src="/static/app.js?v=road-trip-redesign-1"></script>
+    <script src="/static/trip_modal.js?v=road-trip-tab-2"></script>
   </body>
 </html>

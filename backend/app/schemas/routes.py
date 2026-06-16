@@ -16,6 +16,7 @@ class RouteWaypoint(BaseModel):
     label: str
     address: str
     rating: float | None = None
+    userRatingCount: int | None = None
     googleMapsUri: str = ""
 
 

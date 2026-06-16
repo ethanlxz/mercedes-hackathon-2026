@@ -9,6 +9,8 @@ from backend.app.schemas.trip_planner import (
     PlaceResult,
     PlaceSearchRequest,
     PlaceSearchResponse,
+    RoadTripPlannerRequest,
+    RoadTripPlannerResponse,
     TripChoiceRouteRequest,
     TripPreferences,
     TripPlannerRequest,
@@ -25,6 +27,7 @@ from backend.app.services.memory_service import (
     set_location_tag,
 )
 from backend.app.services.place_categories import google_place_type_for_category
+from backend.app.services.road_trip_planner_service import plan_road_trip
 from backend.app.services.trip_planner_service import plan_trip, resume_trip
 
 
@@ -242,10 +245,26 @@ async def trip_choice_route(
             label=request.selectedPlace.name or "Destination",
             address=destination,
             rating=request.selectedPlace.rating,
+            userRatingCount=request.selectedPlace.userRatingCount,
             googleMapsUri=request.selectedPlace.googleMapsUri,
         ),
     ]
     return response
+
+
+@router.post("/road-trip-planner", response_model=RoadTripPlannerResponse)
+async def road_trip_planner(
+    request: RoadTripPlannerRequest,
+    settings: Settings = Depends(get_settings),
+) -> RoadTripPlannerResponse:
+    return await plan_road_trip(
+        origin=request.origin,
+        destination=request.destination,
+        google_maps_server_key=settings.google_maps_server_key,
+        deepseek_api_key=settings.deepseek_api_key,
+        deepseek_model=settings.deepseek_model,
+        deepseek_base_url=settings.deepseek_base_url,
+    )
 
 
 @router.post("/trip-planner", response_model=TripPlannerResponse)

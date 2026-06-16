@@ -76,6 +76,7 @@ async def _route_waypoint(
         label=place.label or label,
         address=place.address or address,
         rating=place.rating,
+        userRatingCount=place.user_rating_count,
         googleMapsUri=place.google_maps_uri,
     )
 

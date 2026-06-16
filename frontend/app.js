@@ -16,6 +16,7 @@ const state = {
   },
   plannerThreadId: "",
   plannerAwaitingClarification: false,
+  roadTripRecommendations: [],
 };
 
 const elements = {
@@ -24,12 +25,15 @@ const elements = {
   sidebarToggle: document.querySelector("#sidebar-toggle"),
   sidebarClose: document.querySelector("#sidebar-close"),
   sidebarScrim: document.querySelector("#sidebar-scrim"),
+  sidebarActions: document.querySelector(".sidebar-actions"),
   gpsButton: document.querySelector("#gps-app-button"),
   plannerButton: document.querySelector("#planner-app-button"),
+  roadTripAppButton: document.querySelector("#road-trip-app-button"),
   editTagsButton: document.querySelector("#edit-tags-button"),
   settingsButton: document.querySelector("#settings-app-button"),
   simplePanel: document.querySelector("#simple-route-panel"),
   plannerPanel: document.querySelector("#planner-panel"),
+  roadTripPanel: document.querySelector("#road-trip-panel"),
   tagsPanel: document.querySelector("#tags-panel"),
   settingsPanel: document.querySelector("#settings-panel"),
   origin: document.querySelector("#origin"),
@@ -37,6 +41,14 @@ const elements = {
   routeButton: document.querySelector("#route-button"),
   status: document.querySelector("#status"),
   plannerStatus: document.querySelector("#planner-status"),
+  roadTripOrigin: document.querySelector("#road-trip-origin"),
+  roadTripDestination: document.querySelector("#road-trip-destination"),
+  roadTripButton: document.querySelector("#road-trip-button"),
+  roadTripStatus: document.querySelector("#road-trip-status"),
+  roadTripResults: document.querySelector("#road-trip-results"),
+  routeRecommendations: document.querySelector("#route-recommendations"),
+  destinationRecommendations: document.querySelector("#destination-recommendations"),
+  foodRecommendations: document.querySelector("#food-recommendations"),
   tagsStatus: document.querySelector("#tags-status"),
   settingsStatus: document.querySelector("#settings-status"),
   pinHoverCard: document.querySelector("#pin-hover-card"),
@@ -58,6 +70,9 @@ const elements = {
 function activeStatusElement() {
   if (state.mode === "planner") {
     return elements.plannerStatus;
+  }
+  if (state.mode === "roadTrip") {
+    return elements.roadTripStatus;
   }
   if (state.mode === "tags") {
     return elements.tagsStatus;
@@ -108,11 +123,34 @@ function setActiveSidebarAction(activeButton) {
   [
     elements.gpsButton,
     elements.plannerButton,
+    elements.roadTripAppButton,
     elements.editTagsButton,
     elements.settingsButton,
   ].forEach((button) => {
     button.classList.toggle("active", button === activeButton);
   });
+}
+
+function setRouteCardLayout(mode) {
+  elements.form.classList.toggle("route-card-road-trip", mode === "roadTrip");
+}
+
+function resetRouteCardScroll() {
+  elements.form.scrollTop = 0;
+}
+
+function switchSidebarMode(mode) {
+  if (mode === "simple") {
+    switchToSimpleMode();
+  } else if (mode === "planner") {
+    switchToPlannerMode();
+  } else if (mode === "roadTrip") {
+    switchToRoadTripMode();
+  } else if (mode === "tags") {
+    switchToTagsMode();
+  } else if (mode === "settings") {
+    switchToSettingsMode();
+  }
 }
 
 function updateClock() {
@@ -264,12 +302,29 @@ function formatRating(rating) {
   return value.toFixed(1).replace(/\.0$/, "");
 }
 
+function formatReviewCount(count) {
+  const value = Number(count);
+  if (!Number.isFinite(value) || value <= 0) {
+    return "";
+  }
+  return `${value.toLocaleString()} reviews`;
+}
+
 function waypointCardContent(waypoint) {
   const rating = formatRating(waypoint.rating);
+  const reviewCount = formatReviewCount(waypoint.userRatingCount);
+  const category = waypoint.category
+    ? `<div class="pin-hover-category">${escapeHtml(waypoint.category)}</div>`
+    : "";
+  const explanation = waypoint.explanation
+    ? `<div class="pin-hover-explanation">${escapeHtml(waypoint.explanation)}</div>`
+    : "";
   return `
+    ${category}
     <div class="pin-hover-title">${escapeHtml(waypoint.label || "Location")}</div>
     <div class="pin-hover-address">${escapeHtml(waypoint.address || "")}</div>
-    ${rating ? `<div class="pin-hover-rating">${escapeHtml(rating)} Google rating</div>` : ""}
+    ${rating ? `<div class="pin-hover-rating">${escapeHtml(rating)} Google rating${reviewCount ? ` / ${escapeHtml(reviewCount)}` : ""}</div>` : ""}
+    ${explanation}
   `;
 }
 
@@ -369,6 +424,90 @@ function createRouteMarker(position, waypoint, index) {
   return marker;
 }
 
+function recommendationColor(section) {
+  if (section === "destination") {
+    return "#a855f7";
+  }
+  if (section === "food") {
+    return "#ef4444";
+  }
+  return "#f59e0b";
+}
+
+function recommendationLabel(section) {
+  if (section === "destination") {
+    return "D";
+  }
+  if (section === "food") {
+    return "F";
+  }
+  return "R";
+}
+
+function recommendationIcon(section) {
+  if (section === "destination") {
+    return "fa-mountain-sun";
+  }
+  if (section === "food") {
+    return "fa-utensils";
+  }
+  return "fa-map-location-dot";
+}
+
+function createRecommendationMarker(recommendation) {
+  const position = {
+    lat: Number(recommendation.latitude),
+    lng: Number(recommendation.longitude),
+  };
+  if (!Number.isFinite(position.lat) || !Number.isFinite(position.lng)) {
+    return null;
+  }
+
+  const marker = new google.maps.Marker({
+    position,
+    map: state.map,
+    label: {
+      text: recommendationLabel(recommendation.section),
+      color: "#ffffff",
+      fontSize: "12px",
+      fontWeight: "900",
+    },
+    icon: {
+      path: google.maps.SymbolPath.CIRCLE,
+      scale: 11,
+      fillColor: recommendationColor(recommendation.section),
+      fillOpacity: 1,
+      strokeColor: "#ffffff",
+      strokeOpacity: 0.95,
+      strokeWeight: 3,
+    },
+    title: `${recommendation.name}: ${recommendation.address}`,
+    zIndex: 55,
+  });
+
+  const hoverWaypoint = {
+    role: "recommendation",
+    label: recommendation.name,
+    address: recommendation.address,
+    rating: recommendation.rating,
+    userRatingCount: recommendation.userRatingCount,
+    category: recommendation.category,
+    explanation: recommendation.explanation,
+  };
+
+  marker.addListener("mouseover", () => {
+    showPinHoverCard(marker.getPosition(), hoverWaypoint);
+  });
+  marker.addListener("mouseout", () => {
+    hidePinHoverCard();
+  });
+  marker.addListener("click", () => {
+    showPinHoverCard(marker.getPosition(), hoverWaypoint);
+  });
+
+  return marker;
+}
+
 async function geocodeAddress(address) {
   if (!state.geocoder) {
     return null;
@@ -461,6 +600,71 @@ async function renderRoute(payload) {
   elements.arrival.textContent = formatArrival(payload.duration);
 }
 
+function recommendationCard(recommendation) {
+  const rating = formatRating(recommendation.rating);
+  const reviewCount = formatReviewCount(recommendation.userRatingCount);
+  const ratingText = rating
+    ? `${rating} Google rating${reviewCount ? ` / ${reviewCount}` : ""}`
+    : "Google rating unavailable";
+  const mapsLink = recommendation.googleMapsUri
+    ? `<a href="${escapeHtml(recommendation.googleMapsUri)}" target="_blank" rel="noreferrer">Open in Maps</a>`
+    : "";
+  const section = ["destination", "food", "route"].includes(recommendation.section)
+    ? recommendation.section
+    : "route";
+
+  return `
+    <article class="recommendation-card recommendation-card-${escapeHtml(section)}">
+      <div class="recommendation-card-icon" aria-hidden="true">
+        <i class="fa-solid ${recommendationIcon(section)}"></i>
+      </div>
+      <div class="recommendation-card-body">
+        <div class="recommendation-card-top">
+          <span>${escapeHtml(recommendation.category)}</span>
+          <em>${escapeHtml(ratingText)}</em>
+        </div>
+        <strong>${escapeHtml(recommendation.name)}</strong>
+        <p>${escapeHtml(recommendation.explanation)}</p>
+        <small>${escapeHtml(recommendation.address)}</small>
+        ${mapsLink}
+      </div>
+    </article>
+  `;
+}
+
+function renderRecommendationGroup(container, recommendations) {
+  if (!recommendations.length) {
+    container.innerHTML = `<p class="empty-recommendations">No recommendations found.</p>`;
+    return;
+  }
+
+  container.innerHTML = recommendations.map(recommendationCard).join("");
+}
+
+function renderRoadTripResults(payload) {
+  const routeRecommendations = payload.routeRecommendations || [];
+  const destinationRecommendations = payload.destinationRecommendations || [];
+  const foodRecommendations = payload.foodRecommendations || [];
+  const allRecommendations = [
+    ...routeRecommendations,
+    ...destinationRecommendations,
+    ...foodRecommendations,
+  ];
+
+  state.roadTripRecommendations = allRecommendations;
+  elements.roadTripResults.classList.remove("hidden");
+  renderRecommendationGroup(elements.routeRecommendations, routeRecommendations);
+  renderRecommendationGroup(elements.destinationRecommendations, destinationRecommendations);
+  renderRecommendationGroup(elements.foodRecommendations, foodRecommendations);
+
+  allRecommendations.forEach((recommendation) => {
+    const marker = createRecommendationMarker(recommendation);
+    if (marker) {
+      state.markers.push(marker);
+    }
+  });
+}
+
 async function requestRoute(origin, destination) {
   const response = await fetch("/api/routes", {
     method: "POST",
@@ -471,6 +675,21 @@ async function requestRoute(origin, destination) {
 
   if (!response.ok) {
     throw new Error(payload.detail || "Route request failed.");
+  }
+
+  return payload;
+}
+
+async function requestRoadTrip(origin, destination) {
+  const response = await fetch("/api/road-trip-planner", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ origin, destination }),
+  });
+  const payload = await response.json().catch(() => ({}));
+
+  if (!response.ok) {
+    throw new Error(payload.detail || "Road trip planner request failed.");
   }
 
   return payload;
@@ -620,8 +839,11 @@ function syncSettingsInputs() {
 
 function switchToSimpleMode() {
   state.mode = "simple";
+  setRouteCardLayout(state.mode);
+  resetRouteCardScroll();
   elements.simplePanel.classList.remove("hidden");
   elements.plannerPanel.classList.add("hidden");
+  elements.roadTripPanel.classList.add("hidden");
   elements.tagsPanel.classList.add("hidden");
   elements.settingsPanel.classList.add("hidden");
   elements.status.classList.remove("error");
@@ -632,8 +854,11 @@ function switchToSimpleMode() {
 
 function switchToPlannerMode() {
   state.mode = "planner";
+  setRouteCardLayout(state.mode);
+  resetRouteCardScroll();
   elements.simplePanel.classList.add("hidden");
   elements.plannerPanel.classList.remove("hidden");
+  elements.roadTripPanel.classList.add("hidden");
   elements.tagsPanel.classList.add("hidden");
   elements.settingsPanel.classList.add("hidden");
   elements.plannerStatus.classList.remove("error");
@@ -642,10 +867,28 @@ function switchToPlannerMode() {
   closeSidebar();
 }
 
-async function switchToTagsMode() {
-  state.mode = "tags";
+function switchToRoadTripMode() {
+  state.mode = "roadTrip";
+  setRouteCardLayout(state.mode);
+  resetRouteCardScroll();
   elements.simplePanel.classList.add("hidden");
   elements.plannerPanel.classList.add("hidden");
+  elements.roadTripPanel.classList.remove("hidden");
+  elements.tagsPanel.classList.add("hidden");
+  elements.settingsPanel.classList.add("hidden");
+  elements.roadTripStatus.classList.remove("error");
+  elements.roadTripStatus.textContent = "Enter an origin and destination to find stops.";
+  setActiveSidebarAction(elements.roadTripAppButton);
+  closeSidebar();
+}
+
+async function switchToTagsMode() {
+  state.mode = "tags";
+  setRouteCardLayout(state.mode);
+  resetRouteCardScroll();
+  elements.simplePanel.classList.add("hidden");
+  elements.plannerPanel.classList.add("hidden");
+  elements.roadTripPanel.classList.add("hidden");
   elements.tagsPanel.classList.remove("hidden");
   elements.settingsPanel.classList.add("hidden");
   elements.tagsStatus.classList.remove("error");
@@ -662,8 +905,11 @@ async function switchToTagsMode() {
 
 async function switchToSettingsMode() {
   state.mode = "settings";
+  setRouteCardLayout(state.mode);
+  resetRouteCardScroll();
   elements.simplePanel.classList.add("hidden");
   elements.plannerPanel.classList.add("hidden");
+  elements.roadTripPanel.classList.add("hidden");
   elements.tagsPanel.classList.add("hidden");
   elements.settingsPanel.classList.remove("hidden");
   elements.settingsStatus.classList.remove("error");
@@ -740,6 +986,36 @@ async function submitTripPlan() {
   }
 }
 
+function setRoadTripStatus(message, isError = false) {
+  elements.roadTripStatus.textContent = message;
+  elements.roadTripStatus.classList.toggle("error", isError);
+}
+
+async function submitRoadTripPlan() {
+  const origin = elements.roadTripOrigin.value.trim();
+  const destination = elements.roadTripDestination.value.trim();
+
+  if (!origin || !destination) {
+    setRoadTripStatus("Enter both origin and destination.", true);
+    return;
+  }
+
+  setButtonLoading(elements.roadTripButton, true, "Plan Route");
+  setRoadTripStatus("Finding useful stops and destination ideas...");
+  elements.roadTripResults.classList.add("hidden");
+
+  try {
+    const plan = await requestRoadTrip(origin, destination);
+    await renderRoute(plan.route);
+    renderRoadTripResults(plan);
+    setRoadTripStatus("Road trip recommendations ready.");
+  } catch (error) {
+    setRoadTripStatus(error.message || "Could not plan that road trip.", true);
+  } finally {
+    setButtonLoading(elements.roadTripButton, false, "Plan Route");
+  }
+}
+
 async function handleTripPlanResponse(plan) {
   state.plannerThreadId = plan.threadId || state.plannerThreadId;
 
@@ -781,11 +1057,33 @@ elements.form.addEventListener("submit", async (event) => {
 elements.sidebarToggle.addEventListener("click", toggleSidebar);
 elements.sidebarClose.addEventListener("click", closeSidebar);
 elements.sidebarScrim.addEventListener("click", closeSidebar);
+elements.sidebarActions.addEventListener("click", (event) => {
+  const button = event.target.closest("[data-mode]");
+  if (!button) {
+    return;
+  }
+  event.preventDefault();
+  switchSidebarMode(button.dataset.mode);
+});
 elements.gpsButton.addEventListener("click", switchToSimpleMode);
 elements.plannerButton.addEventListener("click", switchToPlannerMode);
+elements.roadTripAppButton.addEventListener("click", switchToRoadTripMode);
 elements.editTagsButton.addEventListener("click", switchToTagsMode);
 elements.settingsButton.addEventListener("click", switchToSettingsMode);
 elements.tripButton.addEventListener("click", submitTripPlan);
+elements.roadTripButton.addEventListener("click", submitRoadTripPlan);
+elements.roadTripOrigin.addEventListener("keydown", (event) => {
+  if (event.key === "Enter") {
+    event.preventDefault();
+    submitRoadTripPlan();
+  }
+});
+elements.roadTripDestination.addEventListener("keydown", (event) => {
+  if (event.key === "Enter") {
+    event.preventDefault();
+    submitRoadTripPlan();
+  }
+});
 elements.saveHomeButton.addEventListener("click", () => saveTag("home"));
 elements.saveWorkButton.addEventListener("click", () => saveTag("work"));
 elements.saveCurrentLocationButton.addEventListener("click", saveCurrentLocation);
