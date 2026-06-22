@@ -9,7 +9,7 @@
       rel="stylesheet"
       href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css"
     />
-    <link rel="stylesheet" href="/static/style.css?v=road-trip-redesign-1" />
+    <link rel="stylesheet" href="/static/style.css?v=fatigue-no-scroll-2" />
   </head>
   <body class="bg-neutral-950 text-white">
     <main class="carplay-shell">
@@ -30,6 +30,7 @@
           <button id="gps-app-button" class="sidebar-action active" type="button" data-mode="simple">GPS</button>
           <button id="planner-app-button" class="sidebar-action" type="button" data-mode="planner">Trip Planner</button>
           <button id="road-trip-app-button" class="sidebar-action" type="button" data-mode="roadTrip">Road Trip</button>
+          <button id="fatigue-app-button" class="sidebar-action" type="button" data-mode="fatigue">Driver Monitor</button>
           <button id="edit-tags-button" class="sidebar-action" type="button" data-mode="tags">Edit Tags</button>
           <button id="settings-app-button" class="sidebar-action" type="button" data-mode="settings">Settings</button>
         </nav>
@@ -274,10 +275,97 @@
             <div id="trip-choice-results" class="trip-choice-results"></div>
           </div>
         </div>
+
+        <section
+          id="fatigue-monitor"
+          class="fatigue-monitor hidden"
+          aria-hidden="true"
+          aria-label="Driver fatigue monitor"
+        >
+          <header id="fatigue-monitor-drag" class="fatigue-monitor-header">
+            <div>
+              <span class="fatigue-eyebrow">
+                <i class="fa-solid fa-eye" aria-hidden="true"></i>
+                Driver Monitor
+              </span>
+              <strong id="fatigue-face-status">No camera stream</strong>
+            </div>
+            <div class="fatigue-window-actions">
+              <button id="fatigue-start-button" class="fatigue-control fatigue-start" type="button">
+                Start
+              </button>
+              <button id="fatigue-stop-button" class="fatigue-control fatigue-stop" type="button" disabled>
+                Stop
+              </button>
+              <button id="fatigue-close-button" class="fatigue-icon-button" type="button" aria-label="Close driver monitor">
+                <i class="fa-solid fa-xmark" aria-hidden="true"></i>
+              </button>
+            </div>
+          </header>
+
+          <div class="fatigue-video-frame">
+            <video id="fatigue-webcam" autoplay muted playsinline></video>
+            <canvas id="fatigue-overlay"></canvas>
+            <div id="fatigue-empty-state" class="fatigue-empty-state">
+              <strong>Camera preview</strong>
+              <span>Press Start and allow webcam access.</span>
+            </div>
+          </div>
+
+          <div class="fatigue-dashboard">
+            <section class="fatigue-score-panel">
+              <div>
+                <span>Fatigue</span>
+                <strong id="fatigue-level">Unknown</strong>
+              </div>
+              <em id="fatigue-score">0%</em>
+              <div class="fatigue-score-meter" aria-hidden="true">
+                <span id="fatigue-score-fill"></span>
+              </div>
+            </section>
+
+            <section class="fatigue-symptom-panel">
+              <div class="fatigue-section-title">Symptoms</div>
+              <ul id="fatigue-symptoms-list" class="fatigue-symptoms-list">
+                <li>No symptoms detected</li>
+              </ul>
+            </section>
+
+            <section class="fatigue-counter-panel" aria-label="Fatigue session counters">
+              <div>
+                <span>Eyes</span>
+                <strong id="fatigue-eye-count">0</strong>
+              </div>
+              <div>
+                <span>Blinks</span>
+                <strong id="fatigue-blink-count">0</strong>
+              </div>
+              <div>
+                <span>Yawns</span>
+                <strong id="fatigue-yawn-count">0</strong>
+              </div>
+              <div>
+                <span>Nods</span>
+                <strong id="fatigue-nod-count">0</strong>
+              </div>
+            </section>
+          </div>
+        </section>
+
+        <div id="fatigue-alert-modal" class="fatigue-alert-modal hidden" aria-hidden="true">
+          <section class="fatigue-alert-dialog" role="dialog" aria-modal="true" aria-labelledby="fatigue-alert-title">
+            <span>Fatigue Alert</span>
+            <h2 id="fatigue-alert-title">High fatigue risk detected</h2>
+            <p>The monitor is seeing signs of tiredness. Please pause and continue only when you feel alert.</p>
+            <button id="fatigue-alert-ok-button" class="go-button fatigue-alert-ok" type="button">
+              OK
+            </button>
+          </section>
+        </div>
       </section>
     </main>
 
-    <script src="/static/app.js?v=road-trip-redesign-1"></script>
+    <script src="/static/app.js?v=fatigue-no-scroll-2"></script>
     <script src="/static/trip_modal.js?v=road-trip-tab-2"></script>
   </body>
 </html>

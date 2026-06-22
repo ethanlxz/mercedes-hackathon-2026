@@ -4,7 +4,7 @@ import httpx
 from fastapi import HTTPException, status
 
 from backend.app.schemas.routes import RouteResponse, RouteSummary, RouteWaypoint
-from backend.app.schemas.trip_planner import TripPreferences
+from backend.app.trip_planner.schemas import TripPreferences
 from backend.app.services.google_places import search_place
 
 

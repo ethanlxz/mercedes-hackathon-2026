@@ -14,6 +14,17 @@ const state = {
   settings: {
     currentLocation: "",
   },
+  fatigue: {
+    stream: null,
+    socket: null,
+    frameTimer: null,
+    awaitingResponse: false,
+    alertLocked: false,
+    userStoppedDetection: false,
+    isDragging: false,
+    dragOffsetX: 0,
+    dragOffsetY: 0,
+  },
   plannerThreadId: "",
   plannerAwaitingClarification: false,
   roadTripRecommendations: [],
@@ -29,6 +40,7 @@ const elements = {
   gpsButton: document.querySelector("#gps-app-button"),
   plannerButton: document.querySelector("#planner-app-button"),
   roadTripAppButton: document.querySelector("#road-trip-app-button"),
+  fatigueButton: document.querySelector("#fatigue-app-button"),
   editTagsButton: document.querySelector("#edit-tags-button"),
   settingsButton: document.querySelector("#settings-app-button"),
   simplePanel: document.querySelector("#simple-route-panel"),
@@ -65,6 +77,38 @@ const elements = {
   distance: document.querySelector("#distance-text"),
   arrival: document.querySelector("#arrival-time"),
   clock: document.querySelector("#clock"),
+  fatigueMonitor: document.querySelector("#fatigue-monitor"),
+  fatigueMonitorDrag: document.querySelector("#fatigue-monitor-drag"),
+  fatigueWebcam: document.querySelector("#fatigue-webcam"),
+  fatigueOverlay: document.querySelector("#fatigue-overlay"),
+  fatigueStartButton: document.querySelector("#fatigue-start-button"),
+  fatigueStopButton: document.querySelector("#fatigue-stop-button"),
+  fatigueCloseButton: document.querySelector("#fatigue-close-button"),
+  fatigueFaceStatus: document.querySelector("#fatigue-face-status"),
+  fatigueEmptyState: document.querySelector("#fatigue-empty-state"),
+  fatigueLevel: document.querySelector("#fatigue-level"),
+  fatigueScore: document.querySelector("#fatigue-score"),
+  fatigueScoreFill: document.querySelector("#fatigue-score-fill"),
+  fatigueSymptomsList: document.querySelector("#fatigue-symptoms-list"),
+  fatigueEyeCount: document.querySelector("#fatigue-eye-count"),
+  fatigueBlinkCount: document.querySelector("#fatigue-blink-count"),
+  fatigueYawnCount: document.querySelector("#fatigue-yawn-count"),
+  fatigueNodCount: document.querySelector("#fatigue-nod-count"),
+  fatigueStatusDot: document.querySelector("#fatigue-status-dot"),
+  fatigueConnectionStatus: document.querySelector("#fatigue-connection-status"),
+  fatigueAlertModal: document.querySelector("#fatigue-alert-modal"),
+  fatigueAlertOkButton: document.querySelector("#fatigue-alert-ok-button"),
+};
+
+const fatigueCaptureCanvas = document.createElement("canvas");
+const fatigueCaptureCtx = fatigueCaptureCanvas.getContext("2d");
+const fatigueOverlayCtx = elements.fatigueOverlay.getContext("2d");
+const fatigueLandmarkColors = {
+  leftEye: "#60a5fa",
+  rightEye: "#22d3ee",
+  nose: "#fbbf24",
+  leftEar: "#c084fc",
+  rightEar: "#fb7185",
 };
 
 function activeStatusElement() {
@@ -124,11 +168,26 @@ function setActiveSidebarAction(activeButton) {
     elements.gpsButton,
     elements.plannerButton,
     elements.roadTripAppButton,
+    elements.fatigueButton,
     elements.editTagsButton,
     elements.settingsButton,
   ].forEach((button) => {
     button.classList.toggle("active", button === activeButton);
   });
+}
+
+function syncActiveSidebarAction() {
+  if (state.mode === "planner") {
+    setActiveSidebarAction(elements.plannerButton);
+  } else if (state.mode === "roadTrip") {
+    setActiveSidebarAction(elements.roadTripAppButton);
+  } else if (state.mode === "tags") {
+    setActiveSidebarAction(elements.editTagsButton);
+  } else if (state.mode === "settings") {
+    setActiveSidebarAction(elements.settingsButton);
+  } else {
+    setActiveSidebarAction(elements.gpsButton);
+  }
 }
 
 function setRouteCardLayout(mode) {
@@ -146,6 +205,8 @@ function switchSidebarMode(mode) {
     switchToPlannerMode();
   } else if (mode === "roadTrip") {
     switchToRoadTripMode();
+  } else if (mode === "fatigue") {
+    openFatigueMonitor();
   } else if (mode === "tags") {
     switchToTagsMode();
   } else if (mode === "settings") {
@@ -1047,6 +1108,379 @@ async function handleTripPlanResponse(plan) {
   setStatus("Trip route ready.");
 }
 
+function setFatigueStatus(message, status = "") {
+  if (elements.fatigueConnectionStatus) {
+    elements.fatigueConnectionStatus.textContent = message;
+  }
+  if (elements.fatigueStatusDot) {
+    elements.fatigueStatusDot.className = `fatigue-status-dot ${status}`;
+  }
+}
+
+function setFatigueButtonLoading(button, isLoading, label) {
+  button.disabled = isLoading;
+  button.textContent = isLoading ? "..." : label;
+}
+
+function openFatigueMonitor() {
+  elements.fatigueMonitor.classList.remove("hidden");
+  elements.fatigueMonitor.setAttribute("aria-hidden", "false");
+  setActiveSidebarAction(elements.fatigueButton);
+  closeSidebar();
+  syncFatigueCanvasSize();
+}
+
+function closeFatigueMonitor() {
+  stopFatigueDetection();
+  elements.fatigueMonitor.classList.add("hidden");
+  elements.fatigueMonitor.setAttribute("aria-hidden", "true");
+  syncActiveSidebarAction();
+}
+
+async function startFatigueDetection() {
+  state.fatigue.userStoppedDetection = false;
+  setFatigueButtonLoading(elements.fatigueStartButton, true, "Start");
+  elements.fatigueStopButton.disabled = true;
+  setFatigueStatus("Requesting camera access", "warning");
+
+  try {
+    state.fatigue.stream = await navigator.mediaDevices.getUserMedia({
+      video: {
+        width: { ideal: 1280 },
+        height: { ideal: 720 },
+        facingMode: "user",
+      },
+      audio: false,
+    });
+
+    elements.fatigueWebcam.srcObject = state.fatigue.stream;
+    await elements.fatigueWebcam.play();
+    elements.fatigueEmptyState.classList.add("hidden");
+    elements.fatigueStopButton.disabled = false;
+    syncFatigueCanvasSize();
+    connectFatigueWebSocket();
+  } catch (error) {
+    setFatigueStatus("Camera access failed", "error");
+    elements.fatigueFaceStatus.textContent = "Unable to access camera";
+    setFatigueButtonLoading(elements.fatigueStartButton, false, "Start");
+    elements.fatigueStopButton.disabled = true;
+  }
+}
+
+function stopFatigueDetection() {
+  state.fatigue.userStoppedDetection = true;
+  state.fatigue.alertLocked = false;
+  state.fatigue.awaitingResponse = false;
+  stopFatigueFrameLoop();
+
+  if (state.fatigue.socket) {
+    state.fatigue.socket.close();
+    state.fatigue.socket = null;
+  }
+
+  if (state.fatigue.stream) {
+    state.fatigue.stream.getTracks().forEach((track) => track.stop());
+    state.fatigue.stream = null;
+  }
+
+  elements.fatigueWebcam.srcObject = null;
+  elements.fatigueAlertModal.classList.add("hidden");
+  elements.fatigueAlertModal.setAttribute("aria-hidden", "true");
+  elements.fatigueEmptyState.classList.remove("hidden");
+  fatigueOverlayCtx.clearRect(0, 0, elements.fatigueOverlay.width, elements.fatigueOverlay.height);
+  updateFatigueScore("Unknown", 0);
+  updateFatigueCounters({});
+  updateFatigueSymptoms([]);
+  elements.fatigueFaceStatus.textContent = "No camera stream";
+  setFatigueStatus("Detection stopped", "ready");
+  setFatigueButtonLoading(elements.fatigueStartButton, false, "Start");
+  elements.fatigueStopButton.disabled = true;
+}
+
+function connectFatigueWebSocket() {
+  const protocol = window.location.protocol === "https:" ? "wss" : "ws";
+  const host = window.location.host || "127.0.0.1:8000";
+  state.fatigue.socket = new WebSocket(`${protocol}://${host}/ws/fatigue/detect`);
+
+  state.fatigue.socket.addEventListener("open", () => {
+    setFatigueStatus("Detection active", "connected");
+    elements.fatigueFaceStatus.textContent = "Looking for face";
+    setFatigueButtonLoading(elements.fatigueStartButton, false, "Start");
+    elements.fatigueStartButton.disabled = true;
+    elements.fatigueStopButton.disabled = false;
+    startFatigueFrameLoop();
+  });
+
+  state.fatigue.socket.addEventListener("message", (event) => {
+    state.fatigue.awaitingResponse = false;
+    updateFatigueDashboard(JSON.parse(event.data));
+  });
+
+  state.fatigue.socket.addEventListener("close", () => {
+    stopFatigueFrameLoop();
+    state.fatigue.awaitingResponse = false;
+    if (state.fatigue.userStoppedDetection) {
+      return;
+    }
+
+    if (!state.fatigue.alertLocked) {
+      setFatigueStatus("Connection closed", "error");
+      elements.fatigueStartButton.disabled = false;
+      elements.fatigueStopButton.disabled = !state.fatigue.stream;
+    }
+  });
+
+  state.fatigue.socket.addEventListener("error", () => {
+    setFatigueStatus("Backend connection failed", "error");
+    elements.fatigueStartButton.disabled = false;
+    elements.fatigueStopButton.disabled = !state.fatigue.stream;
+  });
+}
+
+function startFatigueFrameLoop() {
+  stopFatigueFrameLoop();
+  state.fatigue.frameTimer = window.setInterval(sendFatigueFrame, 140);
+}
+
+function stopFatigueFrameLoop() {
+  if (state.fatigue.frameTimer) {
+    window.clearInterval(state.fatigue.frameTimer);
+    state.fatigue.frameTimer = null;
+  }
+}
+
+function sendFatigueFrame() {
+  if (
+    state.fatigue.alertLocked ||
+    state.fatigue.awaitingResponse ||
+    !state.fatigue.socket ||
+    state.fatigue.socket.readyState !== WebSocket.OPEN ||
+    elements.fatigueWebcam.readyState < HTMLMediaElement.HAVE_CURRENT_DATA
+  ) {
+    return;
+  }
+
+  const width = elements.fatigueWebcam.videoWidth;
+  const height = elements.fatigueWebcam.videoHeight;
+  if (!width || !height) {
+    return;
+  }
+
+  fatigueCaptureCanvas.width = 640;
+  fatigueCaptureCanvas.height = Math.round((height / width) * fatigueCaptureCanvas.width);
+  fatigueCaptureCtx.drawImage(
+    elements.fatigueWebcam,
+    0,
+    0,
+    fatigueCaptureCanvas.width,
+    fatigueCaptureCanvas.height,
+  );
+
+  state.fatigue.awaitingResponse = true;
+  state.fatigue.socket.send(
+    JSON.stringify({
+      frame: fatigueCaptureCanvas.toDataURL("image/jpeg", 0.72),
+    }),
+  );
+}
+
+function updateFatigueDashboard(result) {
+  elements.fatigueFaceStatus.textContent = result.faceDetected ? "Face detected" : "No face detected";
+  updateFatigueScore(result.fatigueLevel, result.fatigueScore);
+  updateFatigueCounters(result.symptomCounts);
+  updateFatigueSymptoms(result.symptoms, result.symptomCounts);
+  drawFatigueLandmarks(result.landmarks || {});
+
+  if (result.alert && !state.fatigue.alertLocked) {
+    state.fatigue.alertLocked = true;
+    stopFatigueFrameLoop();
+    setFatigueStatus("Fatigue alert active", "error");
+    elements.fatigueAlertModal.classList.remove("hidden");
+    elements.fatigueAlertModal.setAttribute("aria-hidden", "false");
+  }
+}
+
+function updateFatigueScore(level, score) {
+  const safeScore = Number.isFinite(score) ? score : 0;
+  elements.fatigueLevel.textContent = level || "Unknown";
+  elements.fatigueScore.textContent = `${safeScore}%`;
+  elements.fatigueScoreFill.style.width = `${Math.min(Math.max(safeScore, 0), 100)}%`;
+
+  let color = "#22c55e";
+  if (safeScore >= 75) {
+    color = "#ef4444";
+  } else if (safeScore >= 50) {
+    color = "#f59e0b";
+  } else if (safeScore >= 25) {
+    color = "#1685ff";
+  }
+  elements.fatigueScoreFill.style.background = color;
+}
+
+function updateFatigueCounters(counts = {}) {
+  elements.fatigueEyeCount.textContent = counts.eyeClosures || 0;
+  elements.fatigueBlinkCount.textContent = counts.blinks || 0;
+  elements.fatigueYawnCount.textContent = counts.yawns || 0;
+  elements.fatigueNodCount.textContent = counts.headNods || 0;
+}
+
+function formatFatigueSymptom(symptom, counts = {}) {
+  const countBySymptom = {
+    "Eyes closed too long": counts.eyeClosures,
+    "Frequent blinking": counts.blinks,
+    Yawning: counts.yawns,
+    "Head nodding": counts.headNods,
+  };
+  const count = countBySymptom[symptom];
+  return count ? `${symptom} x${count}` : symptom;
+}
+
+function updateFatigueSymptoms(symptoms, counts = {}) {
+  elements.fatigueSymptomsList.innerHTML = "";
+
+  if (!symptoms || symptoms.length === 0) {
+    const emptyItem = document.createElement("li");
+    emptyItem.textContent = "No symptoms detected";
+    elements.fatigueSymptomsList.appendChild(emptyItem);
+    return;
+  }
+
+  symptoms.forEach((symptom) => {
+    const item = document.createElement("li");
+    item.className = "active";
+    item.textContent = formatFatigueSymptom(symptom, counts);
+    elements.fatigueSymptomsList.appendChild(item);
+  });
+}
+
+function drawFatigueLandmarks(landmarks) {
+  syncFatigueCanvasSize();
+  fatigueOverlayCtx.clearRect(0, 0, elements.fatigueOverlay.width, elements.fatigueOverlay.height);
+
+  drawFatigueFeature(landmarks.leftEye, fatigueLandmarkColors.leftEye, true);
+  drawFatigueFeature(landmarks.rightEye, fatigueLandmarkColors.rightEye, true);
+  drawFatigueFeature(landmarks.nose, fatigueLandmarkColors.nose, true);
+  drawFatigueFeature(landmarks.leftEar, fatigueLandmarkColors.leftEar, false);
+  drawFatigueFeature(landmarks.rightEar, fatigueLandmarkColors.rightEar, false);
+}
+
+function drawFatigueFeature(points, color, connect) {
+  if (!Array.isArray(points) || points.length === 0) {
+    return;
+  }
+
+  const scaled = points.map((point) => ({
+    x: point.x * elements.fatigueOverlay.width,
+    y: point.y * elements.fatigueOverlay.height,
+  }));
+
+  fatigueOverlayCtx.save();
+  fatigueOverlayCtx.strokeStyle = color;
+  fatigueOverlayCtx.fillStyle = color;
+  fatigueOverlayCtx.lineWidth = 3;
+  fatigueOverlayCtx.shadowColor = "rgba(0, 0, 0, 0.38)";
+  fatigueOverlayCtx.shadowBlur = 8;
+
+  if (connect && scaled.length > 1) {
+    fatigueOverlayCtx.beginPath();
+    scaled.forEach((point, index) => {
+      if (index === 0) {
+        fatigueOverlayCtx.moveTo(point.x, point.y);
+      } else {
+        fatigueOverlayCtx.lineTo(point.x, point.y);
+      }
+    });
+    fatigueOverlayCtx.closePath();
+    fatigueOverlayCtx.stroke();
+  }
+
+  scaled.forEach((point) => {
+    fatigueOverlayCtx.beginPath();
+    fatigueOverlayCtx.arc(point.x, point.y, 4, 0, Math.PI * 2);
+    fatigueOverlayCtx.fill();
+  });
+
+  fatigueOverlayCtx.restore();
+}
+
+function acknowledgeFatigueAlert() {
+  state.fatigue.alertLocked = false;
+  elements.fatigueAlertModal.classList.add("hidden");
+  elements.fatigueAlertModal.setAttribute("aria-hidden", "true");
+  updateFatigueScore("Normal", 0);
+  updateFatigueCounters({});
+  updateFatigueSymptoms([]);
+  fatigueOverlayCtx.clearRect(0, 0, elements.fatigueOverlay.width, elements.fatigueOverlay.height);
+  setFatigueStatus("Detection active", "connected");
+
+  if (state.fatigue.socket?.readyState === WebSocket.OPEN) {
+    state.fatigue.socket.send(JSON.stringify({ action: "reset" }));
+  }
+
+  startFatigueFrameLoop();
+}
+
+function syncFatigueCanvasSize() {
+  const rect = elements.fatigueWebcam.getBoundingClientRect();
+  const width = Math.max(1, Math.round(rect.width));
+  const height = Math.max(1, Math.round(rect.height));
+
+  if (elements.fatigueOverlay.width !== width || elements.fatigueOverlay.height !== height) {
+    elements.fatigueOverlay.width = width;
+    elements.fatigueOverlay.height = height;
+  }
+}
+
+function clampFatigueMonitorPosition(left, top) {
+  const rect = elements.fatigueMonitor.getBoundingClientRect();
+  const padding = 12;
+  const maxLeft = Math.max(padding, window.innerWidth - rect.width - padding);
+  const maxTop = Math.max(padding, window.innerHeight - rect.height - padding);
+  return {
+    left: Math.min(Math.max(padding, left), maxLeft),
+    top: Math.min(Math.max(padding, top), maxTop),
+  };
+}
+
+function moveFatigueMonitor(clientX, clientY) {
+  const position = clampFatigueMonitorPosition(
+    clientX - state.fatigue.dragOffsetX,
+    clientY - state.fatigue.dragOffsetY,
+  );
+  elements.fatigueMonitor.style.left = `${position.left}px`;
+  elements.fatigueMonitor.style.top = `${position.top}px`;
+  elements.fatigueMonitor.style.right = "auto";
+}
+
+function startFatigueDrag(event) {
+  if (event.target.closest("button")) {
+    return;
+  }
+  const pointer = event.touches ? event.touches[0] : event;
+  const rect = elements.fatigueMonitor.getBoundingClientRect();
+  state.fatigue.isDragging = true;
+  state.fatigue.dragOffsetX = pointer.clientX - rect.left;
+  state.fatigue.dragOffsetY = pointer.clientY - rect.top;
+  elements.fatigueMonitor.classList.add("is-dragging");
+}
+
+function dragFatigueMonitor(event) {
+  if (!state.fatigue.isDragging) {
+    return;
+  }
+  const pointer = event.touches ? event.touches[0] : event;
+  if (!pointer) {
+    return;
+  }
+  event.preventDefault();
+  moveFatigueMonitor(pointer.clientX, pointer.clientY);
+}
+
+function stopFatigueDrag() {
+  state.fatigue.isDragging = false;
+  elements.fatigueMonitor.classList.remove("is-dragging");
+}
+
 elements.form.addEventListener("submit", async (event) => {
   event.preventDefault();
   if (state.mode === "simple") {
@@ -1068,6 +1502,7 @@ elements.sidebarActions.addEventListener("click", (event) => {
 elements.gpsButton.addEventListener("click", switchToSimpleMode);
 elements.plannerButton.addEventListener("click", switchToPlannerMode);
 elements.roadTripAppButton.addEventListener("click", switchToRoadTripMode);
+elements.fatigueButton.addEventListener("click", openFatigueMonitor);
 elements.editTagsButton.addEventListener("click", switchToTagsMode);
 elements.settingsButton.addEventListener("click", switchToSettingsMode);
 elements.tripButton.addEventListener("click", submitTripPlan);
@@ -1087,8 +1522,32 @@ elements.roadTripDestination.addEventListener("keydown", (event) => {
 elements.saveHomeButton.addEventListener("click", () => saveTag("home"));
 elements.saveWorkButton.addEventListener("click", () => saveTag("work"));
 elements.saveCurrentLocationButton.addEventListener("click", saveCurrentLocation);
+elements.fatigueStartButton.addEventListener("click", startFatigueDetection);
+elements.fatigueStopButton.addEventListener("click", stopFatigueDetection);
+elements.fatigueCloseButton.addEventListener("click", closeFatigueMonitor);
+elements.fatigueAlertOkButton.addEventListener("click", acknowledgeFatigueAlert);
+elements.fatigueMonitorDrag.addEventListener("mousedown", startFatigueDrag);
+elements.fatigueMonitorDrag.addEventListener("touchstart", startFatigueDrag, { passive: true });
+document.addEventListener("mousemove", dragFatigueMonitor);
+document.addEventListener("touchmove", dragFatigueMonitor, { passive: false });
+document.addEventListener("mouseup", stopFatigueDrag);
+document.addEventListener("touchend", stopFatigueDrag);
+window.addEventListener("resize", () => {
+  syncFatigueCanvasSize();
+  if (!elements.fatigueMonitor.classList.contains("hidden")) {
+    const rect = elements.fatigueMonitor.getBoundingClientRect();
+    const position = clampFatigueMonitorPosition(rect.left, rect.top);
+    elements.fatigueMonitor.style.left = `${position.left}px`;
+    elements.fatigueMonitor.style.top = `${position.top}px`;
+    elements.fatigueMonitor.style.right = "auto";
+  }
+});
 document.addEventListener("keydown", (event) => {
   if (event.key === "Escape") {
+    if (!elements.fatigueAlertModal.classList.contains("hidden")) {
+      acknowledgeFatigueAlert();
+      return;
+    }
     closeSidebar();
   }
 });

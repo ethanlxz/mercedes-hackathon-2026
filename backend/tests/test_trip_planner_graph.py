@@ -5,9 +5,9 @@ from langgraph.checkpoint.memory import InMemorySaver
 from langgraph.types import Command
 
 from backend.app.schemas.routes import RouteResponse, RouteSummary
-from backend.app.schemas.trip_planner import PlaceResult
+from backend.app.trip_planner.schemas import PlaceResult
 from backend.app.services.google_places import ResolvedPlace
-from backend.app.services import trip_planner_service as planner
+from backend.app.trip_planner import service as planner
 
 
 def _route(leg_seconds: list[int]) -> RouteResponse:

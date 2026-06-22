@@ -2,7 +2,7 @@ import pytest
 
 from backend.app.schemas.routes import RouteResponse, RouteSummary
 from backend.app.services.google_places import ResolvedPlace
-from backend.app.services import road_trip_planner_service as planner
+from backend.app.trip_planner import road_trip_service as planner
 
 
 ENCODED_POLYLINE = "_p~iF~ps|U_ulLnnqC_mqNvxq`@"

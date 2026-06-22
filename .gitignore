@@ -6,3 +6,4 @@ __pycache__/
 backend/data/user_memory.json
 backend/data/trip_planner.sqlite*
 .pytest_cache/
+.matplotlib-cache/

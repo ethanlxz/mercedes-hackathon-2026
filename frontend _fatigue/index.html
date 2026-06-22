@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Fatigue Detection System</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <main class="app-shell">
+      <header class="app-header">
+        <div>
+          <p class="eyebrow">Driver monitoring dashboard</p>
+          <h1>Fatigue Detection System</h1>
+        </div>
+        <div class="connection-card" aria-live="polite">
+          <span class="status-dot" id="statusDot"></span>
+          <span id="connectionStatus">Ready to start</span>
+        </div>
+      </header>
+
+      <section class="dashboard-grid">
+        <section class="camera-panel" aria-label="Live webcam fatigue detection">
+          <div class="video-toolbar">
+            <div>
+              <span class="section-label">Live camera</span>
+              <strong id="faceStatus">No camera stream</strong>
+            </div>
+            <div class="camera-actions">
+              <button class="primary-button" id="startButton" type="button">Start Detecting</button>
+              <button class="primary-button stop-button" id="stopButton" type="button" disabled>Stop Detecting</button>
+            </div>
+          </div>
+
+          <div class="video-frame">
+            <video id="webcam" autoplay muted playsinline></video>
+            <canvas id="overlay"></canvas>
+            <div class="empty-state" id="emptyState">
+              <strong>Camera preview will appear here</strong>
+              <span>Click Start Detecting and allow webcam access.</span>
+            </div>
+          </div>
+        </section>
+
+        <aside class="insights-panel" aria-label="Fatigue analysis">
+          <section class="metric-card">
+            <span class="section-label">Fatigue level</span>
+            <div class="score-row">
+              <strong id="fatigueLevel">Unknown</strong>
+              <span id="fatigueScore">0%</span>
+            </div>
+            <div class="score-meter" aria-hidden="true">
+              <span id="scoreFill"></span>
+            </div>
+          </section>
+
+          <section class="metric-card">
+            <span class="section-label">Detected symptoms</span>
+            <ul class="symptoms-list" id="symptomsList">
+              <li>No symptoms detected</li>
+            </ul>
+          </section>
+
+          <section class="metric-card compact">
+            <span class="section-label">Session counters</span>
+            <div class="counter-grid">
+              <div>
+                <span>Eye closures</span>
+                <strong id="eyeClosureCount">0</strong>
+              </div>
+              <div>
+                <span>Blinks</span>
+                <strong id="blinkCount">0</strong>
+              </div>
+              <div>
+                <span>Yawns</span>
+                <strong id="yawnCount">0</strong>
+              </div>
+              <div>
+                <span>Head nods</span>
+                <strong id="headNodCount">0</strong>
+              </div>
+            </div>
+          </section>
+
+          <section class="metric-card compact">
+            <span class="section-label">Highlighted landmarks</span>
+            <div class="legend-grid">
+              <span><i class="legend-dot left-eye"></i>Left eye</span>
+              <span><i class="legend-dot right-eye"></i>Right eye</span>
+              <span><i class="legend-dot nose"></i>Nose</span>
+              <span><i class="legend-dot left-ear"></i>Left ear</span>
+              <span><i class="legend-dot right-ear"></i>Right ear</span>
+            </div>
+          </section>
+        </aside>
+      </section>
+    </main>
+
+    <div class="alert-backdrop" id="alertBackdrop" role="dialog" aria-modal="true" aria-labelledby="alertTitle">
+      <section class="alert-dialog">
+        <span class="alert-label">Fatigue alert</span>
+        <h2 id="alertTitle">High fatigue risk detected</h2>
+        <p>The current signs suggest tiredness. Please pause, rest, and continue only when you feel alert.</p>
+        <button class="primary-button danger" id="alertOkButton" type="button">OK, Restart Detection</button>
+      </section>
+    </div>
+
+    <script src="script.js"></script>
+  </body>
+</html>
