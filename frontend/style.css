@@ -656,6 +656,253 @@ select {
   width: min(620px, calc(100% - 116px));
 }
 
+.route-card.route-card-battery {
+  width: min(980px, calc(100% - 116px));
+  max-height: calc(100vh - 48px);
+}
+
+.battery-box {
+  display: grid;
+  grid-template-columns: minmax(280px, 0.92fr) minmax(360px, 1.08fr);
+  gap: 16px;
+}
+
+.battery-heading,
+.battery-model-strip {
+  grid-column: 1 / -1;
+}
+
+.battery-heading {
+  display: flex;
+  gap: 14px;
+  align-items: flex-start;
+  justify-content: space-between;
+}
+
+.battery-eyebrow {
+  display: inline-flex;
+  gap: 8px;
+  align-items: center;
+  color: #8ec5ff;
+  font-size: 12px;
+  font-weight: 900;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
+.battery-heading strong {
+  display: block;
+  margin-top: 7px;
+  color: #fff;
+  font-size: 28px;
+  font-weight: 950;
+  line-height: 1.05;
+}
+
+.battery-reset-button {
+  flex: 0 0 auto;
+  height: 42px;
+  padding: 0 15px;
+  font-size: 14px;
+}
+
+.battery-model-strip {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 11px 13px;
+  border: 1px solid rgba(142, 197, 255, 0.22);
+  border-radius: 14px;
+  background: rgba(22, 133, 255, 0.12);
+}
+
+.battery-model-strip span,
+.battery-model-strip strong {
+  color: rgba(255, 255, 255, 0.78);
+  font-size: 12px;
+  font-weight: 900;
+  line-height: 1.2;
+  text-transform: uppercase;
+}
+
+.battery-model-strip span::before {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  margin-right: 8px;
+  border-radius: 999px;
+  background: #f59e0b;
+  content: "";
+}
+
+.battery-model-strip span.ready::before {
+  background: #22c55e;
+}
+
+.battery-card {
+  display: grid;
+  gap: 13px;
+  padding: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.06);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+
+.battery-trip-card {
+  border-color: rgba(34, 197, 94, 0.22);
+  background: linear-gradient(145deg, rgba(34, 197, 94, 0.12), rgba(255, 255, 255, 0.055));
+}
+
+.battery-field {
+  display: grid;
+  gap: 8px;
+}
+
+.battery-field > span,
+.battery-section-heading > span,
+.battery-metrics span {
+  color: rgba(255, 255, 255, 0.66);
+  font-size: 12px;
+  font-weight: 900;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
+.battery-input-wrap {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 9px;
+  align-items: center;
+}
+
+.battery-input {
+  height: 46px;
+  margin-top: 0;
+  font-size: 19px;
+}
+
+.battery-input-wrap em {
+  color: rgba(255, 255, 255, 0.62);
+  font-size: 13px;
+  font-style: normal;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.battery-predict-button {
+  width: 100%;
+  font-size: 19px;
+}
+
+.battery-result {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 12px;
+  align-items: center;
+  padding: 14px;
+  border-radius: 14px;
+  background: rgba(0, 0, 0, 0.2);
+}
+
+.battery-result span {
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 13px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.battery-result strong {
+  color: #8ec5ff;
+  font-size: 34px;
+  font-weight: 950;
+  line-height: 1;
+}
+
+.battery-section-heading {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.battery-select {
+  min-width: 150px;
+  height: 40px;
+  padding: 0 10px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 12px;
+  outline: none;
+  background: rgba(0, 0, 0, 0.22);
+  color: #fff;
+  font-size: 14px;
+  font-weight: 850;
+}
+
+.battery-select:focus {
+  border-color: #2388ff;
+  box-shadow: 0 0 0 4px rgba(35, 136, 255, 0.2);
+}
+
+.battery-metrics {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.battery-metrics div {
+  min-width: 0;
+  padding: 12px;
+  border-radius: 13px;
+  background: rgba(0, 0, 0, 0.18);
+}
+
+.battery-metrics strong {
+  display: block;
+  margin-top: 8px;
+  color: #fff;
+  font-size: 20px;
+  font-weight: 950;
+  line-height: 1;
+}
+
+.battery-weekly-chart {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(26px, 1fr));
+  gap: 8px;
+  min-height: 230px;
+  align-items: end;
+  padding-top: 8px;
+}
+
+.battery-bar-group {
+  display: grid;
+  gap: 7px;
+  justify-items: center;
+}
+
+.battery-bar-group span,
+.battery-bar-group em {
+  color: rgba(255, 255, 255, 0.64);
+  font-size: 11px;
+  font-style: normal;
+  font-weight: 850;
+  line-height: 1;
+}
+
+.battery-bar {
+  width: min(36px, 86%);
+  min-height: 12px;
+  border-radius: 10px 10px 4px 4px;
+  background: rgba(255, 255, 255, 0.16);
+}
+
+.battery-bar.active {
+  background: linear-gradient(180deg, #8ec5ff, #1685ff);
+  box-shadow: 0 10px 20px rgba(22, 133, 255, 0.2);
+}
+
 .route-label {
   position: absolute;
   z-index: 8;
@@ -1256,6 +1503,17 @@ select {
   box-shadow: 0 12px 24px rgba(239, 68, 68, 0.26);
 }
 
+@media (max-width: 1040px) {
+  .route-card.route-card-battery {
+    width: calc(100% - 116px);
+  }
+
+  .battery-box {
+    grid-template-columns: 1fr;
+  }
+
+}
+
 @media (max-width: 760px) {
   .carplay-shell {
     min-height: 100vh;
@@ -1295,6 +1553,13 @@ select {
     width: calc(100% - 88px);
   }
 
+  .route-card.route-card-battery {
+    top: 74px;
+    left: 14px;
+    width: calc(100% - 28px);
+    max-height: calc(100vh - 88px);
+  }
+
   .trip-input {
     min-height: 118px;
   }
@@ -1323,6 +1588,42 @@ select {
 
   .road-trip-button {
     font-size: 18px;
+  }
+
+  .battery-heading {
+    display: grid;
+    gap: 12px;
+  }
+
+  .battery-heading strong {
+    font-size: 23px;
+  }
+
+  .battery-reset-button {
+    width: 100%;
+  }
+
+  .battery-model-strip,
+  .battery-section-heading {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .battery-select {
+    width: 100%;
+  }
+
+  .battery-metrics {
+    grid-template-columns: 1fr;
+  }
+
+  .battery-weekly-chart {
+    gap: 5px;
+    min-height: 170px;
+  }
+
+  .battery-result strong {
+    font-size: 28px;
   }
 
   .recommendation-card {

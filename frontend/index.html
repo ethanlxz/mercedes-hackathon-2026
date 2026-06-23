@@ -30,6 +30,7 @@
           <button id="gps-app-button" class="sidebar-action active" type="button" data-mode="simple">GPS</button>
           <button id="planner-app-button" class="sidebar-action" type="button" data-mode="planner">Trip Planner</button>
           <button id="road-trip-app-button" class="sidebar-action" type="button" data-mode="roadTrip">Road Trip</button>
+          <button id="battery-app-button" class="sidebar-action" type="button" data-mode="battery">Battery</button>
           <button id="fatigue-app-button" class="sidebar-action" type="button" data-mode="fatigue">Driver Monitor</button>
           <button id="edit-tags-button" class="sidebar-action" type="button" data-mode="tags">Edit Tags</button>
           <button id="settings-app-button" class="sidebar-action" type="button" data-mode="settings">Settings</button>
@@ -163,6 +164,87 @@
                   <div id="food-recommendations" class="recommendation-list"></div>
                 </section>
               </div>
+            </section>
+          </div>
+
+          <div id="battery-panel" class="hidden">
+            <section class="battery-box" aria-label="Battery Optimization">
+              <header class="battery-heading">
+                <div>
+                  <span class="battery-eyebrow">
+                    <i class="fa-solid fa-bolt" aria-hidden="true"></i>
+                    Battery Optimization
+                  </span>
+                  <strong>Plan the charge</strong>
+                </div>
+                <button id="battery-reset-button" class="secondary-button battery-reset-button" type="button">
+                  Reset
+                </button>
+              </header>
+
+              <div class="battery-model-strip">
+                <span id="battery-model-status">Model loading</span>
+                <strong id="battery-dataset-rows">Dataset: -- rows</strong>
+              </div>
+
+              <div class="battery-card battery-trip-card">
+                <label class="battery-field" for="battery-distance-input">
+                  <span>Trip distance</span>
+                  <div class="battery-input-wrap">
+                    <input
+                      id="battery-distance-input"
+                      class="route-input battery-input"
+                      type="number"
+                      min="1"
+                      max="1000"
+                      step="0.1"
+                      value="80"
+                      placeholder="80"
+                    />
+                    <em>km</em>
+                  </div>
+                </label>
+
+                <button id="battery-predict-button" class="go-button battery-predict-button" type="button">
+                  Calculate Battery
+                </button>
+
+                <div class="battery-result">
+                  <span>Required battery</span>
+                  <strong id="battery-required-value">--%</strong>
+                </div>
+
+                <p id="battery-status" class="status-text planner-status" role="status">
+                  Enter a trip distance to estimate battery required.
+                </p>
+              </div>
+
+              <div class="battery-card">
+                <div class="battery-section-heading">
+                  <span>Typical driving</span>
+                  <select id="battery-weekday-input" class="battery-select" name="day_of_week">
+                    <option>Monday</option>
+                    <option selected>Tuesday</option>
+                    <option>Wednesday</option>
+                    <option>Thursday</option>
+                    <option>Friday</option>
+                    <option>Saturday</option>
+                    <option>Sunday</option>
+                  </select>
+                </div>
+                <div class="battery-metrics">
+                  <div>
+                    <span>Distance</span>
+                    <strong id="battery-expected-distance">-- km</strong>
+                  </div>
+                  <div>
+                    <span>Usage</span>
+                    <strong id="battery-expected-usage">--%</strong>
+                  </div>
+                </div>
+                <div id="battery-weekly-chart" class="battery-weekly-chart" aria-label="Weekly driving chart"></div>
+              </div>
+
             </section>
           </div>
 

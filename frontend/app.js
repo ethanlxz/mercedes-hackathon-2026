@@ -28,6 +28,7 @@ const state = {
   plannerThreadId: "",
   plannerAwaitingClarification: false,
   roadTripRecommendations: [],
+  batterySummary: null,
 };
 
 const elements = {
@@ -40,12 +41,14 @@ const elements = {
   gpsButton: document.querySelector("#gps-app-button"),
   plannerButton: document.querySelector("#planner-app-button"),
   roadTripAppButton: document.querySelector("#road-trip-app-button"),
+  batteryButton: document.querySelector("#battery-app-button"),
   fatigueButton: document.querySelector("#fatigue-app-button"),
   editTagsButton: document.querySelector("#edit-tags-button"),
   settingsButton: document.querySelector("#settings-app-button"),
   simplePanel: document.querySelector("#simple-route-panel"),
   plannerPanel: document.querySelector("#planner-panel"),
   roadTripPanel: document.querySelector("#road-trip-panel"),
+  batteryPanel: document.querySelector("#battery-panel"),
   tagsPanel: document.querySelector("#tags-panel"),
   settingsPanel: document.querySelector("#settings-panel"),
   origin: document.querySelector("#origin"),
@@ -61,6 +64,17 @@ const elements = {
   routeRecommendations: document.querySelector("#route-recommendations"),
   destinationRecommendations: document.querySelector("#destination-recommendations"),
   foodRecommendations: document.querySelector("#food-recommendations"),
+  batteryModelStatus: document.querySelector("#battery-model-status"),
+  batteryDatasetRows: document.querySelector("#battery-dataset-rows"),
+  batteryDistanceInput: document.querySelector("#battery-distance-input"),
+  batteryPredictButton: document.querySelector("#battery-predict-button"),
+  batteryResetButton: document.querySelector("#battery-reset-button"),
+  batteryRequiredValue: document.querySelector("#battery-required-value"),
+  batteryStatus: document.querySelector("#battery-status"),
+  batteryWeekdayInput: document.querySelector("#battery-weekday-input"),
+  batteryExpectedDistance: document.querySelector("#battery-expected-distance"),
+  batteryExpectedUsage: document.querySelector("#battery-expected-usage"),
+  batteryWeeklyChart: document.querySelector("#battery-weekly-chart"),
   tagsStatus: document.querySelector("#tags-status"),
   settingsStatus: document.querySelector("#settings-status"),
   pinHoverCard: document.querySelector("#pin-hover-card"),
@@ -73,6 +87,7 @@ const elements = {
   currentLocationInput: document.querySelector("#current-location-input"),
   saveCurrentLocationButton: document.querySelector("#save-current-location-button"),
   currentLocationDisplay: document.querySelector("#current-location-display"),
+  bottomPill: document.querySelector(".bottom-pill"),
   duration: document.querySelector("#duration-text"),
   distance: document.querySelector("#distance-text"),
   arrival: document.querySelector("#arrival-time"),
@@ -117,6 +132,9 @@ function activeStatusElement() {
   }
   if (state.mode === "roadTrip") {
     return elements.roadTripStatus;
+  }
+  if (state.mode === "battery") {
+    return elements.batteryStatus;
   }
   if (state.mode === "tags") {
     return elements.tagsStatus;
@@ -168,6 +186,7 @@ function setActiveSidebarAction(activeButton) {
     elements.gpsButton,
     elements.plannerButton,
     elements.roadTripAppButton,
+    elements.batteryButton,
     elements.fatigueButton,
     elements.editTagsButton,
     elements.settingsButton,
@@ -181,6 +200,8 @@ function syncActiveSidebarAction() {
     setActiveSidebarAction(elements.plannerButton);
   } else if (state.mode === "roadTrip") {
     setActiveSidebarAction(elements.roadTripAppButton);
+  } else if (state.mode === "battery") {
+    setActiveSidebarAction(elements.batteryButton);
   } else if (state.mode === "tags") {
     setActiveSidebarAction(elements.editTagsButton);
   } else if (state.mode === "settings") {
@@ -192,6 +213,8 @@ function syncActiveSidebarAction() {
 
 function setRouteCardLayout(mode) {
   elements.form.classList.toggle("route-card-road-trip", mode === "roadTrip");
+  elements.form.classList.toggle("route-card-battery", mode === "battery");
+  elements.bottomPill.classList.toggle("hidden", mode === "battery");
 }
 
 function resetRouteCardScroll() {
@@ -205,6 +228,8 @@ function switchSidebarMode(mode) {
     switchToPlannerMode();
   } else if (mode === "roadTrip") {
     switchToRoadTripMode();
+  } else if (mode === "battery") {
+    switchToBatteryMode();
   } else if (mode === "fatigue") {
     openFatigueMonitor();
   } else if (mode === "tags") {
@@ -741,6 +766,20 @@ async function requestRoute(origin, destination) {
   return payload;
 }
 
+async function requestJson(url, options = {}) {
+  const response = await fetch(url, {
+    headers: { "Content-Type": "application/json" },
+    ...options,
+  });
+  const payload = await response.json().catch(() => ({}));
+
+  if (!response.ok) {
+    throw new Error(payload.detail || `Request failed: ${response.status}`);
+  }
+
+  return payload;
+}
+
 async function requestRoadTrip(origin, destination) {
   const response = await fetch("/api/road-trip-planner", {
     method: "POST",
@@ -754,6 +793,26 @@ async function requestRoadTrip(origin, destination) {
   }
 
   return payload;
+}
+
+async function requestBatterySummary() {
+  const health = await requestJson("/api/battery/health");
+  const summary = await requestJson("/api/battery/model/summary");
+  return { health, summary };
+}
+
+async function requestBatteryTrip(distanceKm) {
+  return requestJson("/api/battery/predict/trip", {
+    method: "POST",
+    body: JSON.stringify({ distance_km: distanceKm }),
+  });
+}
+
+async function requestBatteryDaily(dayOfWeek) {
+  return requestJson("/api/battery/predict/daily", {
+    method: "POST",
+    body: JSON.stringify({ day_of_week: dayOfWeek }),
+  });
 }
 
 async function requestTripPlan(instruction) {
@@ -898,6 +957,106 @@ function syncSettingsInputs() {
   elements.currentLocationDisplay.textContent = state.settings.currentLocation || "Not set";
 }
 
+function setBatteryStatus(message, isError = false) {
+  elements.batteryStatus.textContent = message;
+  elements.batteryStatus.classList.toggle("error", isError);
+}
+
+function setBatteryModelStatus(message, isReady = false) {
+  elements.batteryModelStatus.textContent = message;
+  elements.batteryModelStatus.classList.toggle("ready", isReady);
+}
+
+function renderBatteryWeeklyChart(stats, activeDay) {
+  if (!stats?.length) {
+    elements.batteryWeeklyChart.innerHTML = '<p class="empty-recommendations">Weekly data unavailable.</p>';
+    return;
+  }
+
+  const maxDistance = Math.max(...stats.map((day) => Number(day.expected_distance_km) || 0), 1);
+  elements.batteryWeeklyChart.innerHTML = stats
+    .map((day) => {
+      const label = String(day.day_of_week || "").slice(0, 3);
+      const distance = Number(day.expected_distance_km) || 0;
+      const height = Math.max(24, (distance / maxDistance) * 160);
+      const isActive = day.day_of_week === activeDay;
+      return `
+        <div class="battery-bar-group">
+          <span>${Math.round(distance)}</span>
+          <div class="battery-bar ${isActive ? "active" : ""}" style="height: ${height}px"></div>
+          <em>${escapeHtml(label)}</em>
+        </div>
+      `;
+    })
+    .join("");
+}
+
+function renderBatterySummary(summary, health) {
+  state.batterySummary = summary;
+  setBatteryModelStatus(health.models_ready ? "Model ready" : "Model loading", health.models_ready);
+  elements.batteryDatasetRows.textContent = `Dataset: ${summary.row_count} rows`;
+  renderBatteryWeeklyChart(summary.weekday_stats || [], elements.batteryWeekdayInput.value);
+}
+
+async function loadBatterySummary() {
+  setBatteryModelStatus("Model loading", false);
+  setBatteryStatus("Loading battery model...");
+
+  const { health, summary } = await requestBatterySummary();
+  renderBatterySummary(summary, health);
+  await updateBatteryWeekdayPanel();
+  setBatteryStatus("Battery optimizer ready.");
+}
+
+async function submitBatteryPrediction() {
+  const distanceKm = Number(elements.batteryDistanceInput.value);
+  if (!Number.isFinite(distanceKm) || distanceKm <= 0) {
+    setBatteryStatus("Enter a trip distance greater than 0 km.", true);
+    return;
+  }
+
+  setButtonLoading(elements.batteryPredictButton, true, "Calculate Battery");
+  setBatteryStatus("Calculating battery required...");
+
+  try {
+    const trip = await requestBatteryTrip(distanceKm);
+    elements.batteryRequiredValue.textContent = `${trip.required_battery_percent}%`;
+    setBatteryStatus(trip.message || "Battery prediction updated.");
+  } catch (error) {
+    setBatteryStatus(error.message || "Battery prediction failed.", true);
+  } finally {
+    setButtonLoading(elements.batteryPredictButton, false, "Calculate Battery");
+  }
+}
+
+async function updateBatteryWeekdayPanel() {
+  const dayOfWeek = elements.batteryWeekdayInput.value;
+
+  if (state.batterySummary) {
+    renderBatteryWeeklyChart(state.batterySummary.weekday_stats || [], dayOfWeek);
+  }
+
+  try {
+    const daily = await requestBatteryDaily(dayOfWeek);
+    elements.batteryExpectedDistance.textContent = `${daily.expected_distance_km} km`;
+    elements.batteryExpectedUsage.textContent = `${daily.expected_battery_used_percent}%`;
+  } catch (error) {
+    setBatteryStatus(error.message || "Could not load weekday prediction.", true);
+  }
+}
+
+function resetBatteryPanel() {
+  elements.batteryDistanceInput.value = "80";
+  elements.batteryWeekdayInput.value = "Tuesday";
+  elements.batteryRequiredValue.textContent = "--%";
+  elements.batteryExpectedDistance.textContent = "-- km";
+  elements.batteryExpectedUsage.textContent = "--%";
+  if (state.batterySummary) {
+    renderBatteryWeeklyChart(state.batterySummary.weekday_stats || [], "Tuesday");
+  }
+  setBatteryStatus("Battery inputs reset.");
+}
+
 function switchToSimpleMode() {
   state.mode = "simple";
   setRouteCardLayout(state.mode);
@@ -905,6 +1064,7 @@ function switchToSimpleMode() {
   elements.simplePanel.classList.remove("hidden");
   elements.plannerPanel.classList.add("hidden");
   elements.roadTripPanel.classList.add("hidden");
+  elements.batteryPanel.classList.add("hidden");
   elements.tagsPanel.classList.add("hidden");
   elements.settingsPanel.classList.add("hidden");
   elements.status.classList.remove("error");
@@ -920,6 +1080,7 @@ function switchToPlannerMode() {
   elements.simplePanel.classList.add("hidden");
   elements.plannerPanel.classList.remove("hidden");
   elements.roadTripPanel.classList.add("hidden");
+  elements.batteryPanel.classList.add("hidden");
   elements.tagsPanel.classList.add("hidden");
   elements.settingsPanel.classList.add("hidden");
   elements.plannerStatus.classList.remove("error");
@@ -935,12 +1096,42 @@ function switchToRoadTripMode() {
   elements.simplePanel.classList.add("hidden");
   elements.plannerPanel.classList.add("hidden");
   elements.roadTripPanel.classList.remove("hidden");
+  elements.batteryPanel.classList.add("hidden");
   elements.tagsPanel.classList.add("hidden");
   elements.settingsPanel.classList.add("hidden");
   elements.roadTripStatus.classList.remove("error");
   elements.roadTripStatus.textContent = "Enter an origin and destination to find stops.";
   setActiveSidebarAction(elements.roadTripAppButton);
   closeSidebar();
+}
+
+async function switchToBatteryMode() {
+  state.mode = "battery";
+  setRouteCardLayout(state.mode);
+  resetRouteCardScroll();
+  elements.simplePanel.classList.add("hidden");
+  elements.plannerPanel.classList.add("hidden");
+  elements.roadTripPanel.classList.add("hidden");
+  elements.batteryPanel.classList.remove("hidden");
+  elements.tagsPanel.classList.add("hidden");
+  elements.settingsPanel.classList.add("hidden");
+  elements.batteryStatus.classList.remove("error");
+  setActiveSidebarAction(elements.batteryButton);
+  closeSidebar();
+
+  if (state.batterySummary) {
+    renderBatterySummary(state.batterySummary, { models_ready: true });
+    await updateBatteryWeekdayPanel();
+    return;
+  }
+
+  try {
+    await loadBatterySummary();
+    await submitBatteryPrediction();
+  } catch (error) {
+    setBatteryModelStatus("Model unavailable", false);
+    setBatteryStatus(error.message || "Battery optimizer is unavailable.", true);
+  }
 }
 
 async function switchToTagsMode() {
@@ -950,6 +1141,7 @@ async function switchToTagsMode() {
   elements.simplePanel.classList.add("hidden");
   elements.plannerPanel.classList.add("hidden");
   elements.roadTripPanel.classList.add("hidden");
+  elements.batteryPanel.classList.add("hidden");
   elements.tagsPanel.classList.remove("hidden");
   elements.settingsPanel.classList.add("hidden");
   elements.tagsStatus.classList.remove("error");
@@ -971,6 +1163,7 @@ async function switchToSettingsMode() {
   elements.simplePanel.classList.add("hidden");
   elements.plannerPanel.classList.add("hidden");
   elements.roadTripPanel.classList.add("hidden");
+  elements.batteryPanel.classList.add("hidden");
   elements.tagsPanel.classList.add("hidden");
   elements.settingsPanel.classList.remove("hidden");
   elements.settingsStatus.classList.remove("error");
@@ -1485,6 +1678,8 @@ elements.form.addEventListener("submit", async (event) => {
   event.preventDefault();
   if (state.mode === "simple") {
     await submitSimpleRoute();
+  } else if (state.mode === "battery") {
+    await submitBatteryPrediction();
   }
 });
 
@@ -1507,6 +1702,9 @@ elements.editTagsButton.addEventListener("click", switchToTagsMode);
 elements.settingsButton.addEventListener("click", switchToSettingsMode);
 elements.tripButton.addEventListener("click", submitTripPlan);
 elements.roadTripButton.addEventListener("click", submitRoadTripPlan);
+elements.batteryPredictButton.addEventListener("click", submitBatteryPrediction);
+elements.batteryResetButton.addEventListener("click", resetBatteryPanel);
+elements.batteryWeekdayInput.addEventListener("change", updateBatteryWeekdayPanel);
 elements.roadTripOrigin.addEventListener("keydown", (event) => {
   if (event.key === "Enter") {
     event.preventDefault();
