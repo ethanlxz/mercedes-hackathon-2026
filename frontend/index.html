@@ -298,6 +298,29 @@
               </div>
             </div>
 
+            <div class="settings-box ev-battery-settings-box">
+              <div class="settings-box-heading">EV Battery</div>
+              <label class="ev-battery-settings-row" for="ev-battery-level-input">
+                <span>Battery level</span>
+                <div class="ev-battery-settings-input">
+                  <input
+                    id="ev-battery-level-input"
+                    class="route-input tag-address-input"
+                    type="number"
+                    min="0"
+                    max="100"
+                    step="1"
+                    value="82"
+                    placeholder="82"
+                  />
+                  <em>%</em>
+                </div>
+              </label>
+              <button id="save-ev-battery-level-button" class="tag-save-button" type="button">
+                Submit
+              </button>
+            </div>
+
             <p id="settings-status" class="status-text planner-status" role="status"></p>
           </div>
         </form>
@@ -317,6 +340,16 @@
             <span>distance</span>
           </div>
         </div>
+
+        <aside id="ev-battery-widget" class="ev-battery-widget" aria-label="EV battery level">
+          <div>
+            <span>EV Battery</span>
+            <strong id="ev-battery-widget-value">82%</strong>
+          </div>
+          <div class="ev-battery-widget-shell" aria-hidden="true">
+            <div id="ev-battery-widget-fill" class="ev-battery-widget-fill" style="width: 82%"></div>
+          </div>
+        </aside>
 
         <div id="trip-choice-modal" class="trip-choice-modal hidden" aria-hidden="true">
           <div class="trip-choice-dialog" role="dialog" aria-modal="true" aria-labelledby="trip-choice-title">

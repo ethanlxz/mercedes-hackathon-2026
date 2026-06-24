@@ -19,6 +19,7 @@ DEFAULT_MEMORY: dict[str, Any] = {
     },
     "settings": {
         "currentLocation": "",
+        "evBatteryLevel": 82,
     },
 }
 
@@ -75,16 +76,28 @@ def set_location_tag(tag: str, address: str) -> dict[str, str]:
     return get_location_tags()
 
 
-def get_user_settings() -> dict[str, str]:
+def get_user_settings() -> dict[str, Any]:
     settings = load_memory()["settings"]
+    try:
+        ev_battery_level = int(settings.get("evBatteryLevel", 82))
+    except (TypeError, ValueError):
+        ev_battery_level = 82
     return {
         "currentLocation": str(settings.get("currentLocation") or ""),
+        "evBatteryLevel": min(max(ev_battery_level, 0), 100),
     }
 
 
-def set_current_location(address: str) -> dict[str, str]:
+def set_current_location(address: str) -> dict[str, Any]:
     memory = load_memory()
     memory["settings"]["currentLocation"] = address.strip()
+    save_memory(memory)
+    return get_user_settings()
+
+
+def set_ev_battery_level(level: int) -> dict[str, Any]:
+    memory = load_memory()
+    memory["settings"]["evBatteryLevel"] = min(max(int(level), 0), 100)
     save_memory(memory)
     return get_user_settings()
 

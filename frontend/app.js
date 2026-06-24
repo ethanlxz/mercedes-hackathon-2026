@@ -13,6 +13,7 @@ const state = {
   },
   settings: {
     currentLocation: "",
+    evBatteryLevel: 82,
   },
   fatigue: {
     stream: null,
@@ -87,6 +88,10 @@ const elements = {
   currentLocationInput: document.querySelector("#current-location-input"),
   saveCurrentLocationButton: document.querySelector("#save-current-location-button"),
   currentLocationDisplay: document.querySelector("#current-location-display"),
+  evBatteryLevelInput: document.querySelector("#ev-battery-level-input"),
+  saveEvBatteryLevelButton: document.querySelector("#save-ev-battery-level-button"),
+  evBatteryWidgetValue: document.querySelector("#ev-battery-widget-value"),
+  evBatteryWidgetFill: document.querySelector("#ev-battery-widget-fill"),
   bottomPill: document.querySelector(".bottom-pill"),
   duration: document.querySelector("#duration-text"),
   distance: document.querySelector("#distance-text"),
@@ -876,6 +881,7 @@ async function saveCurrentLocation() {
     }
 
     state.settings.currentLocation = payload.currentLocation || "";
+    state.settings.evBatteryLevel = normalizeEVBatteryLevel(payload.evBatteryLevel);
     syncSettingsInputs();
     setStatus(
       state.settings.currentLocation
@@ -886,6 +892,33 @@ async function saveCurrentLocation() {
     setStatus(error.message || "Could not save current location.", true);
   } finally {
     setButtonLoading(elements.saveCurrentLocationButton, false, "Submit");
+  }
+}
+
+async function saveEVBatteryLevel() {
+  const level = normalizeEVBatteryLevel(elements.evBatteryLevelInput.value);
+
+  setButtonLoading(elements.saveEvBatteryLevelButton, true, "Submit");
+
+  try {
+    const response = await fetch("/api/settings/ev-battery-level", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ level }),
+    });
+    const payload = await response.json().catch(() => ({}));
+
+    if (!response.ok) {
+      throw new Error(payload.detail || "Could not save EV battery level.");
+    }
+
+    state.settings.evBatteryLevel = normalizeEVBatteryLevel(payload.evBatteryLevel);
+    syncSettingsInputs();
+    setStatus("EV battery level saved.");
+  } catch (error) {
+    setStatus(error.message || "Could not save EV battery level.", true);
+  } finally {
+    setButtonLoading(elements.saveEvBatteryLevelButton, false, "Submit");
   }
 }
 
@@ -907,6 +940,7 @@ async function loadTags() {
 async function loadSettings() {
   const payload = await requestSettings();
   state.settings.currentLocation = payload.currentLocation || "";
+  state.settings.evBatteryLevel = normalizeEVBatteryLevel(payload.evBatteryLevel);
   syncSettingsInputs();
 }
 
@@ -955,6 +989,24 @@ function syncTagInputs() {
 function syncSettingsInputs() {
   elements.currentLocationInput.value = state.settings.currentLocation || "";
   elements.currentLocationDisplay.textContent = state.settings.currentLocation || "Not set";
+  elements.evBatteryLevelInput.value = String(state.settings.evBatteryLevel);
+  renderEVBatteryWidget(state.settings.evBatteryLevel);
+}
+
+function normalizeEVBatteryLevel(value) {
+  const level = Number(value);
+  if (!Number.isFinite(level)) {
+    return 82;
+  }
+  return Math.min(Math.max(Math.round(level), 0), 100);
+}
+
+function renderEVBatteryWidget(value) {
+  const level = normalizeEVBatteryLevel(value);
+  elements.evBatteryWidgetValue.textContent = `${level}%`;
+  elements.evBatteryWidgetFill.style.width = `${level}%`;
+  elements.evBatteryWidgetFill.classList.toggle("low", level <= 20);
+  elements.evBatteryWidgetFill.classList.toggle("medium", level > 20 && level <= 50);
 }
 
 function setBatteryStatus(message, isError = false) {
@@ -1720,6 +1772,10 @@ elements.roadTripDestination.addEventListener("keydown", (event) => {
 elements.saveHomeButton.addEventListener("click", () => saveTag("home"));
 elements.saveWorkButton.addEventListener("click", () => saveTag("work"));
 elements.saveCurrentLocationButton.addEventListener("click", saveCurrentLocation);
+elements.saveEvBatteryLevelButton.addEventListener("click", saveEVBatteryLevel);
+elements.evBatteryLevelInput.addEventListener("input", (event) => {
+  renderEVBatteryWidget(event.target.value);
+});
 elements.fatigueStartButton.addEventListener("click", startFatigueDetection);
 elements.fatigueStopButton.addEventListener("click", stopFatigueDetection);
 elements.fatigueCloseButton.addEventListener("click", closeFatigueMonitor);

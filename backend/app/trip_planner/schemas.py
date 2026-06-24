@@ -18,10 +18,15 @@ class LocationTagRequest(BaseModel):
 
 class UserSettingsResponse(BaseModel):
     currentLocation: str = ""
+    evBatteryLevel: int = Field(default=82, ge=0, le=100)
 
 
 class CurrentLocationRequest(BaseModel):
     address: str = Field(default="", max_length=500)
+
+
+class EVBatteryLevelRequest(BaseModel):
+    level: int = Field(..., ge=0, le=100)
 
 
 class PlaceSearchRequest(BaseModel):

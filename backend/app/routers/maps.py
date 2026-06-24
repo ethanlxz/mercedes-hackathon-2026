@@ -4,6 +4,7 @@ from backend.app.core.config import Settings, get_settings
 from backend.app.schemas.routes import RouteRequest, RouteResponse
 from backend.app.trip_planner.schemas import (
     CurrentLocationRequest,
+    EVBatteryLevelRequest,
     LocationTagRequest,
     LocationTagsResponse,
     PlaceResult,
@@ -16,6 +17,7 @@ from backend.app.services.google_routes import compute_route
 from backend.app.services.memory_service import (
     get_location_tags,
     get_user_settings,
+    set_ev_battery_level,
     set_current_location,
     set_location_tag,
 )
@@ -119,6 +121,11 @@ async def save_current_location(
         )
 
     return UserSettingsResponse(**set_current_location(place.address))
+
+
+@router.post("/settings/ev-battery-level", response_model=UserSettingsResponse)
+def save_ev_battery_level(request: EVBatteryLevelRequest) -> UserSettingsResponse:
+    return UserSettingsResponse(**set_ev_battery_level(request.level))
 
 
 @router.post("/places/search-nearby", response_model=PlaceSearchResponse)
