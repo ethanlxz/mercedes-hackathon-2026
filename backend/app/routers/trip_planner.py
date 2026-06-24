@@ -3,6 +3,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from backend.app.core.config import Settings, get_settings
 from backend.app.schemas.routes import RouteResponse, RouteWaypoint
 from backend.app.services.google_routes import compute_multi_stop_route
+from backend.app.services.location_context import matches_reference, origin_or_default
 from backend.app.services.memory_service import (
     get_location_tags,
     get_user_settings,
@@ -23,30 +24,6 @@ from backend.app.trip_planner.service import plan_trip, resume_trip
 router = APIRouter(prefix="/api", tags=["trip-planner"])
 
 
-def _default_origin() -> str:
-    current_location = get_user_settings().get("currentLocation", "").strip()
-    if current_location:
-        return current_location
-
-    home = get_location_tags().get("home", "").strip()
-    if home:
-        return home
-
-    return ""
-
-
-def _origin_or_default(origin: str) -> str:
-    return origin.strip() or _default_origin()
-
-
-def _matches_reference(value: str, reference: str) -> bool:
-    cleaned_value = " ".join(value.lower().split())
-    cleaned_reference = " ".join(reference.lower().split())
-    return bool(cleaned_reference) and (
-        cleaned_reference in cleaned_value or cleaned_value in cleaned_reference
-    )
-
-
 def _choice_route_addresses(
     request: TripChoiceRouteRequest,
 ) -> tuple[str, list[str], str]:
@@ -59,7 +36,7 @@ def _choice_route_addresses(
 
     plan = request.normalizedPlan
     if not plan:
-        origin = _origin_or_default("")
+        origin = origin_or_default("", get_location_tags(), get_user_settings())
         if not origin:
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
@@ -74,13 +51,13 @@ def _choice_route_addresses(
     ]
     sequence = [address for address in sequence if address]
     if not sequence:
-        origin = _origin_or_default("")
+        origin = origin_or_default("", get_location_tags(), get_user_settings())
         return origin, [], selected_address
 
     insert_after = len(sequence) - 1
     if request.choiceReference.strip():
         for index, address in enumerate(sequence):
-            if _matches_reference(address, request.choiceReference):
+            if matches_reference(address, request.choiceReference):
                 insert_after = index
 
     sequence.insert(insert_after + 1, selected_address)

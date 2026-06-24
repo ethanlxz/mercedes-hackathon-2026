@@ -14,6 +14,7 @@ from backend.app.trip_planner.schemas import (
 )
 from backend.app.services.google_places import search_place, search_places
 from backend.app.services.google_routes import compute_route
+from backend.app.services.location_context import origin_or_default
 from backend.app.services.memory_service import (
     get_location_tags,
     get_user_settings,
@@ -25,22 +26,6 @@ from backend.app.services.place_categories import google_place_type_for_category
 
 
 router = APIRouter(prefix="/api", tags=["maps"])
-
-
-def _default_origin() -> str:
-    current_location = get_user_settings().get("currentLocation", "").strip()
-    if current_location:
-        return current_location
-
-    home = get_location_tags().get("home", "").strip()
-    if home:
-        return home
-
-    return ""
-
-
-def _origin_or_default(origin: str) -> str:
-    return origin.strip() or _default_origin()
 
 
 def _place_type_filter(query: str) -> str | None:
@@ -63,7 +48,7 @@ async def routes(
     request: RouteRequest,
     settings: Settings = Depends(get_settings),
 ) -> RouteResponse:
-    origin = _origin_or_default(request.origin)
+    origin = origin_or_default(request.origin, get_location_tags(), get_user_settings())
     if not origin:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
@@ -133,7 +118,7 @@ async def search_nearby_places(
     request: PlaceSearchRequest,
     settings: Settings = Depends(get_settings),
 ) -> PlaceSearchResponse:
-    origin = _origin_or_default(request.origin)
+    origin = origin_or_default(request.origin, get_location_tags(), get_user_settings())
     if not origin:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
