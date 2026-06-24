@@ -1,0 +1,280 @@
+﻿@media (max-width: 1040px) {
+  .route-card.route-card-battery {
+    width: calc(100% - 116px);
+  }
+
+  .battery-box {
+    grid-template-columns: 1fr;
+  }
+
+}
+
+@media (max-width: 760px) {
+  .carplay-shell {
+    min-height: 100vh;
+  }
+
+  .sidebar-toggle {
+    top: 14px;
+    left: 14px;
+    width: 48px;
+    height: 48px;
+  }
+
+  .side-rail {
+    width: min(286px, calc(100vw - 36px));
+    padding: 18px 12px 22px;
+  }
+
+  .clock {
+    font-size: 25px;
+  }
+
+  .route-card {
+    top: 14px;
+    left: 74px;
+    width: calc(100% - 88px);
+    max-height: calc(100vh - 128px);
+    padding: 16px;
+    border-radius: 18px;
+  }
+
+  .route-input {
+    height: 44px;
+    font-size: 17px;
+  }
+
+  .route-card.route-card-road-trip {
+    width: calc(100% - 88px);
+  }
+
+  .route-card.route-card-battery {
+    top: 74px;
+    left: 14px;
+    width: calc(100% - 28px);
+    max-height: calc(100vh - 88px);
+  }
+
+  .trip-input {
+    min-height: 118px;
+  }
+
+  .road-trip-heading {
+    display: grid;
+    gap: 12px;
+  }
+
+  .road-trip-heading strong {
+    font-size: 23px;
+  }
+
+  .road-trip-summary {
+    justify-content: flex-start;
+    max-width: none;
+  }
+
+  .road-trip-fields {
+    grid-template-columns: 1fr;
+  }
+
+  .road-trip-field {
+    padding: 11px;
+  }
+
+  .road-trip-button {
+    font-size: 18px;
+  }
+
+  .battery-heading {
+    display: grid;
+    gap: 12px;
+  }
+
+  .battery-heading strong {
+    font-size: 23px;
+  }
+
+  .battery-reset-button {
+    width: 100%;
+  }
+
+  .battery-model-strip,
+  .battery-section-heading {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .battery-select {
+    width: 100%;
+  }
+
+  .battery-metrics {
+    grid-template-columns: 1fr;
+  }
+
+  .battery-weekly-chart {
+    gap: 5px;
+    min-height: 170px;
+  }
+
+  .battery-result strong {
+    font-size: 28px;
+  }
+
+  .recommendation-card {
+    grid-template-columns: 34px 1fr;
+    gap: 10px;
+    padding: 11px;
+  }
+
+  .recommendation-card-icon {
+    width: 34px;
+    height: 34px;
+  }
+
+  .recommendation-card strong {
+    font-size: 15px;
+  }
+
+  .recommendation-card-top {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .route-actions {
+    grid-template-columns: 76px 1fr;
+  }
+
+  .route-label {
+    display: none;
+  }
+
+  .tag-box {
+    padding: 13px;
+  }
+
+  .tag-box-heading,
+  .settings-box-heading {
+    font-size: 19px;
+  }
+
+  .bottom-pill {
+    left: 14px;
+    bottom: 14px;
+    width: calc(100% - 28px);
+    grid-template-columns: repeat(3, minmax(55px, 1fr));
+    gap: 8px;
+    padding: 12px;
+    border-radius: 16px;
+  }
+
+  .bottom-pill strong {
+    font-size: 19px;
+  }
+
+  .bottom-pill span {
+    font-size: 10px;
+  }
+
+  .ev-battery-widget {
+    right: 14px;
+    bottom: 86px;
+    width: min(178px, calc(100% - 28px));
+    padding: 12px;
+    border-radius: 16px;
+  }
+
+  .ev-battery-widget strong {
+    font-size: 22px;
+  }
+
+  .ev-battery-widget span {
+    font-size: 10px;
+  }
+
+  .ev-battery-widget-shell {
+    height: 12px;
+  }
+
+  .trip-choice-modal {
+    padding: 14px;
+  }
+
+  .fatigue-monitor {
+    top: 74px;
+    right: 14px;
+    width: calc(100% - 28px);
+    border-radius: 18px;
+  }
+
+  .fatigue-monitor-header {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .fatigue-window-actions {
+    width: 100%;
+  }
+
+  .fatigue-control {
+    flex: 1 1 auto;
+  }
+
+  .fatigue-video-frame {
+    height: clamp(140px, 24vh, 170px);
+  }
+
+  .fatigue-counter-panel {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .fatigue-alert-modal {
+    padding: 14px;
+  }
+
+  .fatigue-alert-dialog {
+    padding: 22px 16px;
+  }
+
+  .fatigue-alert-dialog h2 {
+    font-size: 25px;
+  }
+
+  .fatigue-rest-card {
+    grid-template-columns: 46px 1fr;
+    gap: 12px;
+    padding: 13px;
+  }
+
+  .fatigue-rest-icon {
+    width: 46px;
+    height: 46px;
+    font-size: 19px;
+  }
+
+  .fatigue-alert-actions {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .fatigue-alert-ok,
+  .fatigue-alert-dismiss {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .trip-choice-dialog {
+    max-height: calc(100vh - 28px);
+    padding: 16px;
+    border-radius: 18px;
+  }
+
+  .trip-choice-header h2 {
+    font-size: 20px;
+  }
+
+  .trip-choice-search {
+    grid-template-columns: 1fr 58px;
+  }
+}
+

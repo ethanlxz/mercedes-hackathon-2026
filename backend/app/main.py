@@ -7,6 +7,7 @@ from fastapi.staticfiles import StaticFiles
 
 from backend.app.routers.battery import load_battery_model
 from backend.app.routers.battery import router as battery_router
+from backend.app.routers.central_agent import router as central_agent_router
 from backend.app.routers.fatigue import router as fatigue_router
 from backend.app.routers.maps import router as maps_router
 from backend.app.routers.trip_planner import router as trip_planner_router
@@ -27,6 +28,7 @@ app.include_router(battery_router)
 app.include_router(fatigue_router)
 app.include_router(maps_router)
 app.include_router(trip_planner_router)
+app.include_router(central_agent_router)
 
 
 @app.get("/api/health")

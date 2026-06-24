@@ -469,18 +469,47 @@
 
         <div id="fatigue-alert-modal" class="fatigue-alert-modal hidden" aria-hidden="true">
           <section class="fatigue-alert-dialog" role="dialog" aria-modal="true" aria-labelledby="fatigue-alert-title">
-            <span>Fatigue Alert</span>
+            <div class="fatigue-alert-symbol" aria-hidden="true">
+              <i class="fa-solid fa-triangle-exclamation"></i>
+            </div>
+            <span id="fatigue-alert-eyebrow">Fatigue Alert</span>
             <h2 id="fatigue-alert-title">High fatigue risk detected</h2>
-            <p>The monitor is seeing signs of tiredness. Please pause and continue only when you feel alert.</p>
-            <button id="fatigue-alert-ok-button" class="go-button fatigue-alert-ok" type="button">
-              OK
-            </button>
+            <p id="fatigue-alert-message">The monitor is seeing signs of tiredness. Please pause and continue only when you feel alert.</p>
+
+            <article id="fatigue-rest-card" class="fatigue-rest-card hidden" aria-label="Recommended rest stop">
+              <div class="fatigue-rest-icon" aria-hidden="true">
+                <i class="fa-solid fa-location-dot"></i>
+              </div>
+              <div>
+                <span id="fatigue-rest-meta">Recommended rest stop</span>
+                <strong id="fatigue-rest-name">Rest stop</strong>
+                <p id="fatigue-rest-address">Address unavailable</p>
+              </div>
+            </article>
+
+            <div class="fatigue-alert-actions">
+              <button id="fatigue-rest-accept-button" class="go-button fatigue-alert-ok" type="button">
+                Rest there
+              </button>
+              <button id="fatigue-alert-dismiss-button" class="secondary-button fatigue-alert-dismiss" type="button">
+                Not now
+              </button>
+            </div>
           </section>
         </div>
       </section>
     </main>
 
-    <script src="/static/app.js?v=fatigue-no-scroll-2"></script>
-    <script src="/static/trip_modal.js?v=road-trip-tab-2"></script>
+    <script src="/static/js/app-state.js?v=feature-split-1"></script>
+    <script src="/static/js/core-map.js?v=feature-split-1"></script>
+    <script src="/static/js/features/road-trip.js?v=feature-split-1"></script>
+    <script src="/static/js/api.js?v=feature-split-1"></script>
+    <script src="/static/js/features/settings-tags.js?v=feature-split-1"></script>
+    <script src="/static/js/features/battery.js?v=feature-split-1"></script>
+    <script src="/static/js/navigation.js?v=feature-split-1"></script>
+    <script src="/static/js/features/trip-actions.js?v=feature-split-1"></script>
+    <script src="/static/js/features/fatigue.js?v=feature-split-1"></script>
+    <script src="/static/js/bootstrap.js?v=feature-split-1"></script>
+    <script src="/static/js/features/trip-choice-modal.js?v=feature-split-1"></script>
   </body>
 </html>
