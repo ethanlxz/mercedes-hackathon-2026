@@ -8,6 +8,21 @@ $DevRequirements = Join-Path $ProjectRoot "backend\requirements-dev.txt"
 $AppHost = "127.0.0.1"
 $AppPort = "8080"
 
+function Install-BackendDependencies {
+    if (-not (Test-Path -LiteralPath $Requirements)) {
+        Write-Host "Could not find backend requirements at: $Requirements" -ForegroundColor Red
+        exit 1
+    }
+
+    Write-Host "Installing backend dependencies..." -ForegroundColor Yellow
+    & $Python -m pip install --upgrade pip setuptools wheel
+    & $Python -m pip install -r $Requirements
+
+    if (Test-Path -LiteralPath $DevRequirements) {
+        & $Python -m pip install -r $DevRequirements
+    }
+}
+
 if (-not (Test-Path -LiteralPath $Python)) {
     Write-Host "Project virtual environment not found. Setting it up..." -ForegroundColor Yellow
 
@@ -29,13 +44,13 @@ if (-not (Test-Path -LiteralPath $Python)) {
         exit 1
     }
 
-    Write-Host "Installing backend dependencies..." -ForegroundColor Yellow
-    & $Python -m pip install --upgrade pip setuptools wheel
-    & $Python -m pip install -r $Requirements
+    Install-BackendDependencies
+}
 
-    if (Test-Path -LiteralPath $DevRequirements) {
-        & $Python -m pip install -r $DevRequirements
-    }
+& $Python -c "import uvicorn" 2>$null
+if ($LASTEXITCODE -ne 0) {
+    Write-Host "Virtual environment exists, but backend dependencies are missing." -ForegroundColor Yellow
+    Install-BackendDependencies
 }
 
 Set-Location -LiteralPath $ProjectRoot
