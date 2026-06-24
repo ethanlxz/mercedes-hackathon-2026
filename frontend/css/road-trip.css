@@ -1,4 +1,4 @@
-﻿.road-trip-box {
+.road-trip-box {
   display: grid;
   gap: 16px;
 }
@@ -15,6 +15,32 @@
   align-items: flex-start;
   justify-content: space-between;
   padding-bottom: 2px;
+}
+
+.road-trip-heading-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.road-trip-close-button {
+  display: inline-grid;
+  place-items: center;
+  height: 34px;
+  width: 34px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+  font-size: 14px;
+  font-weight: 900;
+  cursor: pointer;
+  transition: background 0.2s;
+  flex-shrink: 0;
+}
+
+.road-trip-close-button:hover {
+  background: rgba(255, 255, 255, 0.16);
 }
 
 .road-trip-eyebrow {
@@ -289,5 +315,33 @@
 .route-card.route-card-battery {
   width: min(980px, calc(100% - 116px));
   max-height: calc(100vh - 48px);
+}
+
+.recommendation-card-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 4px;
+}
+
+.recommendation-remove-button {
+  display: inline-grid;
+  place-items: center;
+  height: 28px;
+  width: 28px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.2s;
+  margin-left: auto;
+}
+
+.recommendation-remove-button:hover {
+  background: rgba(239, 68, 68, 0.2);
+  border-color: rgba(239, 68, 68, 0.4);
+  color: #ef4444;
 }
 

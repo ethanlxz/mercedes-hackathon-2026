@@ -10,7 +10,9 @@ $RequiredPython = "3.12"
 
 Set-Location -LiteralPath $ProjectRoot
 
-if (-not (Test-Path -LiteralPath $Python)) {
+$VenvExists = Test-Path -LiteralPath $Python
+
+if (-not $VenvExists) {
     Write-Host "Creating Python $RequiredPython virtual environment..." -ForegroundColor Cyan
 
     if (Get-Command py -ErrorAction SilentlyContinue) {
@@ -37,14 +39,18 @@ if ($VenvPythonVersion -ne $RequiredPython) {
     exit 1
 }
 
-if (-not (Test-Path -LiteralPath $Requirements)) {
-    Write-Host "Requirements file not found: $Requirements" -ForegroundColor Red
-    exit 1
-}
+if (-not $VenvExists) {
+    if (-not (Test-Path -LiteralPath $Requirements)) {
+        Write-Host "Requirements file not found: $Requirements" -ForegroundColor Red
+        exit 1
+    }
 
-Write-Host "Installing requirements..." -ForegroundColor Cyan
-& $Python -m pip install --upgrade pip
-& $Python -m pip install -r $Requirements
+    Write-Host "Installing requirements..." -ForegroundColor Cyan
+    & $Python -m pip install --upgrade pip
+    & $Python -m pip install -r $Requirements
+} else {
+    Write-Host "Venv already exists, skipping requirements installation." -ForegroundColor DarkGray
+}
 
 Write-Host ""
 Write-Host "Starting server..." -ForegroundColor Cyan

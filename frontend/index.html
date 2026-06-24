@@ -44,6 +44,9 @@
 
         <form id="route-form" class="route-card" autocomplete="off">
           <div id="simple-route-panel">
+            <button id="simple-gps-close-button" class="simple-gps-close-button" type="button" aria-label="Close GPS">
+              <i class="fa-solid fa-xmark" aria-hidden="true"></i>
+            </button>
             <label class="field-label" for="origin">Origin</label>
             <input
               id="origin"
@@ -95,10 +98,15 @@
                   </span>
                   <strong>Build the drive</strong>
                 </div>
-                <div class="road-trip-summary" aria-hidden="true">
-                  <span>Stops</span>
-                  <span>Food</span>
-                  <span>Ideas</span>
+                <div class="road-trip-heading-right">
+                  <div class="road-trip-summary" aria-hidden="true">
+                    <span>Stops</span>
+                    <span>Food</span>
+                    <span>Ideas</span>
+                  </div>
+                  <button id="road-trip-close-button" class="road-trip-close-button" type="button" aria-label="Close road trip">
+                    <i class="fa-solid fa-xmark" aria-hidden="true"></i>
+                  </button>
                 </div>
               </header>
 

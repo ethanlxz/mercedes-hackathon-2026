@@ -1,4 +1,4 @@
-﻿function setFatigueStatus(message, status = "") {
+function setFatigueStatus(message, status = "") {
   if (elements.fatigueConnectionStatus) {
     elements.fatigueConnectionStatus.textContent = message;
   }
@@ -289,6 +289,7 @@ function updateFatigueDashboard(result) {
       result.alert &&
       !shownRecommendation &&
       !state.fatigue.alertLocked &&
+      !state.centralAgent.requestInFlight &&
       Date.now() >= state.centralAgent.cooldownUntil
     ) {
       showGenericFatigueAlert();
@@ -344,7 +345,6 @@ function updateFatigueCounters(counts = {}) {
 function formatFatigueSymptom(symptom, counts = {}) {
   const countBySymptom = {
     "Eyes closed too long": counts.eyeClosures,
-    "Frequent blinking": counts.blinks,
     Yawning: counts.yawns,
     "Head nodding": counts.headNods,
   };
@@ -445,7 +445,7 @@ async function acceptFatigueRestStop() {
 
 function dismissFatigueAlert() {
   elements.fatigueAlertMessage.classList.remove("error");
-  hideFatigueAlertAndResume({ cooldown: true });
+  hideFatigueAlertAndResume({ cooldown: false });
 }
 
 function syncFatigueCanvasSize() {

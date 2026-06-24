@@ -1,4 +1,4 @@
-﻿elements.form.addEventListener("submit", async (event) => {
+elements.form.addEventListener("submit", async (event) => {
   event.preventDefault();
   if (state.mode === "simple") {
     await submitSimpleRoute();
@@ -26,6 +26,12 @@ elements.editTagsButton.addEventListener("click", switchToTagsMode);
 elements.settingsButton.addEventListener("click", switchToSettingsMode);
 elements.tripButton.addEventListener("click", submitTripPlan);
 elements.roadTripButton.addEventListener("click", submitRoadTripPlan);
+if (elements.roadTripCloseButton) {
+  elements.roadTripCloseButton.addEventListener("click", closeRoadTripPanel);
+}
+if (elements.simpleGpsCloseButton) {
+  elements.simpleGpsCloseButton.addEventListener("click", closeSimpleGpsPanel);
+}
 elements.batteryPredictButton.addEventListener("click", submitBatteryPrediction);
 elements.batteryResetButton.addEventListener("click", resetBatteryPanel);
 elements.batteryWeekdayInput.addEventListener("change", updateBatteryWeekdayPanel);

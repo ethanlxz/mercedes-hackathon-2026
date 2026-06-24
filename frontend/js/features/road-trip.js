@@ -1,4 +1,4 @@
-﻿function recommendationColor(section) {
+function recommendationColor(section) {
   if (section === "destination") {
     return "#a855f7";
   }
@@ -79,9 +79,40 @@ function createRecommendationMarker(recommendation) {
     showPinHoverCard(marker.getPosition(), hoverWaypoint);
   });
 
-  return marker;
+  marker.recommendationId = recommendation.id;
+return marker;
+}
+function removeRecommendation(id) {
+  console.log('removeRecommendation called for id:', id);
+  console.log('Markers before removal:', state.markers.length);
+
+  // Remove recommendation from state list
+  state.roadTripRecommendations = state.roadTripRecommendations.filter(r => r.id !== id);
+
+  // Iterate over markers in reverse to safely splice
+  for (let i = state.markers.length - 1; i >= 0; i--) {
+    const marker = state.markers[i];
+    if (marker.recommendationId === id) {
+      console.log('Removing marker with id', id);
+      if (typeof marker.setMap === 'function') {
+        marker.setMap(null);
+      }
+      state.markers.splice(i, 1);
+    }
+  }
+
+  console.log('Markers after removal:', state.markers.length);
+
+  // Remove the recommendation card from the UI
+  const card = document.getElementById(id);
+  if (card) {
+    console.log('Removing card element', id);
+    card.remove();
+  }
 }
 
+// Expose globally for inline onclick handlers
+window.removeRecommendation = removeRecommendation;
 async function geocodeAddress(address) {
   if (!state.geocoder) {
     return null;
@@ -186,7 +217,7 @@ function recommendationCard(recommendation) {
     : "route";
 
   return `
-    <article class="recommendation-card recommendation-card-${escapeHtml(section)}">
+    <article id="${recommendation.id}" class="recommendation-card recommendation-card-${escapeHtml(section)}">
       <div class="recommendation-card-icon" aria-hidden="true">
         <i class="fa-solid ${recommendationIcon(section)}"></i>
       </div>
@@ -198,7 +229,12 @@ function recommendationCard(recommendation) {
         <strong>${escapeHtml(recommendation.name)}</strong>
         <p>${escapeHtml(recommendation.explanation)}</p>
         <small>${escapeHtml(recommendation.address)}</small>
-        ${mapsLink}
+        <div class="recommendation-card-footer">
+          ${mapsLink}
+          <button class="recommendation-remove-button" type="button" aria-label="Remove stop" onclick="removeRecommendation('${recommendation.id}')">
+            <i class="fa-solid fa-xmark"></i>
+          </button>
+        </div>
       </div>
     </article>
   `;

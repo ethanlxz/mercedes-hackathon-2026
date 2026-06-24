@@ -1,4 +1,4 @@
-﻿const state = {
+const state = {
   map: null,
   geocoder: null,
   routePolyline: null,
@@ -62,10 +62,12 @@ const elements = {
   destination: document.querySelector("#destination"),
   routeButton: document.querySelector("#route-button"),
   status: document.querySelector("#status"),
+  simpleGpsCloseButton: document.querySelector("#simple-gps-close-button"),
   plannerStatus: document.querySelector("#planner-status"),
   roadTripOrigin: document.querySelector("#road-trip-origin"),
   roadTripDestination: document.querySelector("#road-trip-destination"),
   roadTripButton: document.querySelector("#road-trip-button"),
+  roadTripCloseButton: document.querySelector("#road-trip-close-button"),
   roadTripStatus: document.querySelector("#road-trip-status"),
   roadTripResults: document.querySelector("#road-trip-results"),
   routeRecommendations: document.querySelector("#route-recommendations"),

@@ -98,7 +98,7 @@ class FatigueDetector:
         mouth_open = mouth_ratio > config.MOUTH_OPEN_RATIO_THRESHOLD
 
         closed_too_long = self._track_eye_closure(eyes_closed, now)
-        frequent_blinking = self._track_blinks(eyes_closed, now)
+        self._track_blinks(eyes_closed, now)
         yawning = self._track_yawn(mouth_open, now)
         head_nodding = self._track_head_nod(landmarks[NOSE_TIP].y, now)
         self._track_event_counts(
@@ -110,8 +110,6 @@ class FatigueDetector:
         symptoms = []
         if closed_too_long:
             symptoms.append("Eyes closed too long")
-        if frequent_blinking:
-            symptoms.append("Frequent blinking")
         if yawning:
             symptoms.append("Yawning")
         if head_nodding:
@@ -120,7 +118,6 @@ class FatigueDetector:
         fatigue_score = self._score_fatigue(
             eyes_closed=eyes_closed,
             closed_too_long=closed_too_long,
-            frequent_blinking=frequent_blinking,
             yawning=yawning,
             head_nodding=head_nodding,
         )
@@ -271,7 +268,6 @@ class FatigueDetector:
         *,
         eyes_closed: bool,
         closed_too_long: bool,
-        frequent_blinking: bool,
         yawning: bool,
         head_nodding: bool,
     ) -> int:
@@ -280,8 +276,6 @@ class FatigueDetector:
             score += 18
         if closed_too_long:
             score += 35
-        if frequent_blinking:
-            score += 25
         if yawning:
             score += 28
         if head_nodding:

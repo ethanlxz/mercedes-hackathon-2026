@@ -1,4 +1,4 @@
-﻿function activeStatusElement() {
+function activeStatusElement() {
   if (state.mode === "planner") {
     return elements.plannerStatus;
   }
@@ -84,9 +84,14 @@ function syncActiveSidebarAction() {
 }
 
 function setRouteCardLayout(mode) {
-  elements.form.classList.toggle("route-card-road-trip", mode === "roadTrip");
-  elements.form.classList.toggle("route-card-battery", mode === "battery");
-  elements.bottomPill.classList.toggle("hidden", mode === "battery");
+  if (elements.form) {
+    elements.form.classList.remove("hidden");
+    elements.form.classList.toggle("route-card-road-trip", mode === "roadTrip");
+    elements.form.classList.toggle("route-card-battery", mode === "battery");
+  }
+  if (elements.bottomPill) {
+    elements.bottomPill.classList.toggle("hidden", mode === "battery");
+  }
 }
 
 function resetRouteCardScroll() {

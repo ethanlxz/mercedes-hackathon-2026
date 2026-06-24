@@ -1,4 +1,4 @@
-﻿function switchToSimpleMode() {
+function switchToSimpleMode() {
   state.mode = "simple";
   setRouteCardLayout(state.mode);
   resetRouteCardScroll();
@@ -133,5 +133,19 @@ async function preloadSettings() {
   } catch (error) {
     setStatus(error.message || "Could not load settings.", true);
   }
+}
+
+function closeRoadTripPanel() {
+  if (elements.form) {
+    elements.form.classList.add("hidden");
+  }
+  setActiveSidebarAction(null);
+}
+
+function closeSimpleGpsPanel() {
+  if (elements.form) {
+    elements.form.classList.add("hidden");
+  }
+  setActiveSidebarAction(null);
 }
 

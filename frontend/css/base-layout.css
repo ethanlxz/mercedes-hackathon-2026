@@ -1,4 +1,4 @@
-﻿html,
+html,
 body {
   height: 100%;
   margin: 0;
@@ -397,5 +397,34 @@ select {
 
 .planner-status {
   margin-top: 12px;
+}
+
+#simple-route-panel {
+  position: relative;
+  padding-top: 36px;
+}
+
+.simple-gps-close-button {
+  position: absolute;
+  top: 16px;
+  left: 20px;
+  display: inline-grid;
+  place-items: center;
+  height: 34px;
+  width: 34px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+  font-size: 14px;
+  font-weight: 900;
+  cursor: pointer;
+  transition: background 0.2s;
+  flex-shrink: 0;
+  z-index: 12;
+}
+
+.simple-gps-close-button:hover {
+  background: rgba(255, 255, 255, 0.16);
 }
 
