@@ -1,16 +1,41 @@
 $ErrorActionPreference = "Stop"
 
 $ProjectRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
-$Python = Join-Path $ProjectRoot "venv\Scripts\python.exe"
+$VenvDir = Join-Path $ProjectRoot "venv"
+$Python = Join-Path $VenvDir "Scripts\python.exe"
+$Requirements = Join-Path $ProjectRoot "backend\requirements.txt"
+$DevRequirements = Join-Path $ProjectRoot "backend\requirements-dev.txt"
 $AppHost = "127.0.0.1"
 $AppPort = "8080"
 
 if (-not (Test-Path -LiteralPath $Python)) {
-    Write-Host "Could not find the project virtual environment at:" -ForegroundColor Red
-    Write-Host "  $Python" -ForegroundColor Red
-    Write-Host ""
-    Write-Host "Create or restore the venv first, then run this script again."
-    exit 1
+    Write-Host "Project virtual environment not found. Setting it up..." -ForegroundColor Yellow
+
+    $SystemPython = Get-Command py -ErrorAction SilentlyContinue
+    if ($SystemPython) {
+        & py -3 -m venv $VenvDir
+    }
+    else {
+        $SystemPython = Get-Command python -ErrorAction SilentlyContinue
+        if (-not $SystemPython) {
+            Write-Host "Could not find Python. Install Python 3, then run this script again." -ForegroundColor Red
+            exit 1
+        }
+        & python -m venv $VenvDir
+    }
+
+    if (-not (Test-Path -LiteralPath $Python)) {
+        Write-Host "Virtual environment setup failed: $Python was not created." -ForegroundColor Red
+        exit 1
+    }
+
+    Write-Host "Installing backend dependencies..." -ForegroundColor Yellow
+    & $Python -m pip install --upgrade pip setuptools wheel
+    & $Python -m pip install -r $Requirements
+
+    if (Test-Path -LiteralPath $DevRequirements) {
+        & $Python -m pip install -r $DevRequirements
+    }
 }
 
 Set-Location -LiteralPath $ProjectRoot
