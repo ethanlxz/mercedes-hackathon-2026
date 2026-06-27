@@ -324,7 +324,15 @@
   margin-top: 4px;
 }
 
-.recommendation-remove-button {
+.recommendation-card-actions {
+  display: inline-flex;
+  gap: 7px;
+  align-items: center;
+  margin-left: auto;
+}
+
+.recommendation-remove-button,
+.recommendation-love-button {
   display: inline-grid;
   place-items: center;
   height: 28px;
@@ -336,12 +344,19 @@
   font-size: 12px;
   cursor: pointer;
   transition: all 0.2s;
-  margin-left: auto;
 }
 
 .recommendation-remove-button:hover {
   background: rgba(239, 68, 68, 0.2);
   border-color: rgba(239, 68, 68, 0.4);
+  color: #ef4444;
+}
+
+.recommendation-love-button:hover,
+.recommendation-love-button.active,
+.recommendation-love-button[aria-pressed="true"] {
+  background: rgba(239, 68, 68, 0.2);
+  border-color: rgba(239, 68, 68, 0.44);
   color: #ef4444;
 }
 

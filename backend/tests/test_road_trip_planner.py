@@ -216,3 +216,60 @@ async def test_road_trip_filters_destination_places_far_from_destination(monkeyp
     }
     assert "A Famosa" in destination_names
     assert "IOI City Mall" not in destination_names
+
+
+@pytest.mark.asyncio
+async def test_road_trip_prioritizes_preferred_stop_categories(monkeypatch):
+    async def fake_route(origin, destination, api_key):
+        return RouteResponse(
+            duration="3600s",
+            distanceMeters=120000,
+            encodedPolyline=ENCODED_POLYLINE,
+            summary=RouteSummary(durationText="1 hr", distanceText="120 km"),
+        )
+
+    async def fake_search_places(**kwargs):
+        query = kwargs["text_query"].split(" in ", 1)[0]
+        if query == "cafe":
+            return [
+                ResolvedPlace(
+                    label="Preferred Cafe",
+                    address="Cafe Address",
+                    place_id="preferred-cafe",
+                    latitude=4.6,
+                    longitude=101.1,
+                    rating=4.1,
+                )
+            ]
+        if query == "attractions":
+            return [
+                ResolvedPlace(
+                    label="Neutral Attraction",
+                    address="Attraction Address",
+                    place_id="neutral-attraction",
+                    latitude=4.6,
+                    longitude=101.1,
+                    rating=4.8,
+                )
+            ]
+        return []
+
+    monkeypatch.setattr(planner, "compute_route", fake_route)
+    monkeypatch.setattr(planner, "search_places", fake_search_places)
+    monkeypatch.setattr(planner, "_decode_polyline", lambda value: [(4.6, 101.1), (5.4, 100.3)])
+    monkeypatch.setattr(
+        planner,
+        "get_central_agent_memory",
+        lambda: {"preferredStopTypes": {"Coffee break": 2}, "dislikedStopTypes": {}},
+    )
+
+    response = await planner.plan_road_trip(
+        origin="Kuala Lumpur",
+        destination="Penang",
+        google_maps_server_key="google-key",
+        deepseek_api_key="",
+        deepseek_model="model",
+        deepseek_base_url="url",
+    )
+
+    assert response.routeRecommendations[0].name == "Preferred Cafe"

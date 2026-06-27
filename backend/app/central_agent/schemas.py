@@ -6,6 +6,12 @@ from backend.app.schemas.routes import RouteResponse
 
 
 Severity = Literal["warning", "high", "critical"]
+ChargingDecision = Literal[
+    "no_charging_required",
+    "charge_before_departure",
+    "charge_during_trip",
+    "charge_near_destination",
+]
 
 
 class ActiveRoadTripRequest(BaseModel):
@@ -86,3 +92,45 @@ class RestStopAcceptRequest(BaseModel):
     notificationId: str = Field(default="", max_length=100)
     place: RestStopPlace
 
+
+class ChargingRecommendationRequest(BaseModel):
+    activeRouteId: str = Field(..., min_length=1, max_length=100)
+
+
+class ChargingRecommendation(BaseModel):
+    id: str
+    source: Literal["charging_decision"] = "charging_decision"
+    chargingRequired: bool
+    decision: ChargingDecision
+    title: str
+    message: str
+    currentBatteryPercent: float
+    requiredBatteryPercent: float
+    remainingBatteryPercent: float
+    tripDistanceKm: float
+    triggerDistanceKm: float | None = None
+    place: RestStopPlace | None = None
+    estimatedDriveSeconds: int | None = None
+    distanceMeters: int | None = None
+    primaryAction: NotificationAction = Field(
+        default_factory=lambda: NotificationAction(
+            label="Add charger stop",
+            type="add_charging_stop",
+        )
+    )
+    secondaryAction: NotificationAction = Field(
+        default_factory=lambda: NotificationAction(
+            label="Not now",
+            type="dismiss",
+        )
+    )
+
+
+class ChargingRecommendationResponse(BaseModel):
+    recommendation: ChargingRecommendation | None = None
+
+
+class ChargingStopAcceptRequest(BaseModel):
+    activeRouteId: str = Field(..., min_length=1, max_length=100)
+    notificationId: str = Field(default="", max_length=100)
+    place: RestStopPlace

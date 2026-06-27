@@ -158,6 +158,10 @@
     font-size: 19px;
   }
 
+  .preference-memory-grid {
+    grid-template-columns: 1fr;
+  }
+
   .bottom-pill {
     left: 14px;
     bottom: 14px;

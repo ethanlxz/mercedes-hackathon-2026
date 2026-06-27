@@ -80,39 +80,115 @@ function createRecommendationMarker(recommendation) {
   });
 
   marker.recommendationId = recommendation.id;
-return marker;
+  return marker;
 }
+
+function findRecommendation(id) {
+  return state.roadTripRecommendations.find((recommendation) => recommendation.id === id);
+}
+
+function applyPreferenceMemory(payload) {
+  if (!payload) {
+    return;
+  }
+  state.preferenceMemory = {
+    preferredStopTypes: payload.preferredStopTypes || [],
+    dislikedStopTypes: payload.dislikedStopTypes || [],
+  };
+  if (typeof syncPreferenceMemoryUI === "function") {
+    syncPreferenceMemoryUI();
+  }
+}
+
 function removeRecommendation(id) {
-  console.log('removeRecommendation called for id:', id);
-  console.log('Markers before removal:', state.markers.length);
+  state.roadTripRecommendations = state.roadTripRecommendations.filter((recommendation) => recommendation.id !== id);
 
-  // Remove recommendation from state list
-  state.roadTripRecommendations = state.roadTripRecommendations.filter(r => r.id !== id);
-
-  // Iterate over markers in reverse to safely splice
   for (let i = state.markers.length - 1; i >= 0; i--) {
     const marker = state.markers[i];
     if (marker.recommendationId === id) {
-      console.log('Removing marker with id', id);
-      if (typeof marker.setMap === 'function') {
+      if (typeof marker.setMap === "function") {
         marker.setMap(null);
       }
       state.markers.splice(i, 1);
     }
   }
 
-  console.log('Markers after removal:', state.markers.length);
-
-  // Remove the recommendation card from the UI
   const card = document.getElementById(id);
   if (card) {
-    console.log('Removing card element', id);
+    const list = card.closest(".recommendation-list");
     card.remove();
+    if (list && !list.querySelector(".recommendation-card")) {
+      list.innerHTML = `<p class="empty-recommendations">No recommendations found.</p>`;
+    }
   }
 }
 
-// Expose globally for inline onclick handlers
-window.removeRecommendation = removeRecommendation;
+async function loveRecommendation(id) {
+  const recommendation = findRecommendation(id);
+  const button = document.querySelector(`[data-recommendation-action="love"][data-recommendation-id="${CSS.escape(id)}"]`);
+  if (!recommendation || !button) {
+    return;
+  }
+
+  const nextLoved = button.getAttribute("aria-pressed") !== "true";
+  recommendation.loved = nextLoved;
+  button.setAttribute("aria-pressed", nextLoved ? "true" : "false");
+  button.classList.toggle("active", nextLoved);
+  button.setAttribute("aria-label", nextLoved ? "Unlike stop" : "Love stop");
+  button.disabled = true;
+
+  try {
+    const payload = await sendPreferenceFeedback(recommendation, nextLoved ? "love" : "unlove");
+    applyPreferenceMemory(payload);
+    setRoadTripStatus(nextLoved ? "Preference saved." : "Preference removed.");
+  } catch (error) {
+    recommendation.loved = !nextLoved;
+    button.setAttribute("aria-pressed", !nextLoved ? "true" : "false");
+    button.classList.toggle("active", !nextLoved);
+    button.setAttribute("aria-label", !nextLoved ? "Unlike stop" : "Love stop");
+    setRoadTripStatus(error.message || "Could not update that preference.", true);
+  } finally {
+    button.disabled = false;
+  }
+}
+
+async function closeRecommendation(id) {
+  const recommendation = findRecommendation(id);
+  if (!recommendation) {
+    removeRecommendation(id);
+    return;
+  }
+
+  removeRecommendation(id);
+
+  try {
+    const payload = await sendPreferenceFeedback(recommendation, "close");
+    applyPreferenceMemory(payload);
+    setRoadTripStatus("Recommendation removed.");
+  } catch (error) {
+    setRoadTripStatus(error.message || "Removed locally, but could not save the preference.", true);
+  }
+}
+
+function handleRecommendationActionClick(event) {
+  const button = event.target.closest("[data-recommendation-action]");
+  if (!button) {
+    return;
+  }
+  event.preventDefault();
+
+  const id = button.dataset.recommendationId || "";
+  if (!id) {
+    return;
+  }
+
+  if (button.dataset.recommendationAction === "love") {
+    loveRecommendation(id);
+  } else if (button.dataset.recommendationAction === "close") {
+    closeRecommendation(id);
+  }
+}
+
 async function geocodeAddress(address) {
   if (!state.geocoder) {
     return null;
@@ -217,7 +293,7 @@ function recommendationCard(recommendation) {
     : "route";
 
   return `
-    <article id="${recommendation.id}" class="recommendation-card recommendation-card-${escapeHtml(section)}">
+    <article id="${escapeHtml(recommendation.id)}" class="recommendation-card recommendation-card-${escapeHtml(section)}" data-recommendation-id="${escapeHtml(recommendation.id)}">
       <div class="recommendation-card-icon" aria-hidden="true">
         <i class="fa-solid ${recommendationIcon(section)}"></i>
       </div>
@@ -231,9 +307,14 @@ function recommendationCard(recommendation) {
         <small>${escapeHtml(recommendation.address)}</small>
         <div class="recommendation-card-footer">
           ${mapsLink}
-          <button class="recommendation-remove-button" type="button" aria-label="Remove stop" onclick="removeRecommendation('${recommendation.id}')">
-            <i class="fa-solid fa-xmark"></i>
-          </button>
+          <div class="recommendation-card-actions">
+            <button class="recommendation-love-button" type="button" aria-label="${recommendation.loved ? "Unlike stop" : "Love stop"}" aria-pressed="${recommendation.loved ? "true" : "false"}" data-recommendation-action="love" data-recommendation-id="${escapeHtml(recommendation.id)}">
+              <i class="fa-solid fa-heart" aria-hidden="true"></i>
+            </button>
+            <button class="recommendation-remove-button" type="button" aria-label="Remove stop" data-recommendation-action="close" data-recommendation-id="${escapeHtml(recommendation.id)}">
+              <i class="fa-solid fa-xmark" aria-hidden="true"></i>
+            </button>
+          </div>
         </div>
       </div>
     </article>

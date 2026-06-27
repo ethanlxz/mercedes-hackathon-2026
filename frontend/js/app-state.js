@@ -15,6 +15,10 @@ const state = {
     currentLocation: "",
     evBatteryLevel: 82,
   },
+  preferenceMemory: {
+    preferredStopTypes: [],
+    dislikedStopTypes: [],
+  },
   fatigue: {
     stream: null,
     socket: null,
@@ -98,6 +102,9 @@ const elements = {
   currentLocationDisplay: document.querySelector("#current-location-display"),
   evBatteryLevelInput: document.querySelector("#ev-battery-level-input"),
   saveEvBatteryLevelButton: document.querySelector("#save-ev-battery-level-button"),
+  preferenceMemoryPrefers: document.querySelector("#preference-memory-prefers"),
+  preferenceMemoryDislikes: document.querySelector("#preference-memory-dislikes"),
+  preferenceMemoryResetButton: document.querySelector("#preference-memory-reset-button"),
   evBatteryWidgetValue: document.querySelector("#ev-battery-widget-value"),
   evBatteryWidgetFill: document.querySelector("#ev-battery-widget-fill"),
   bottomPill: document.querySelector(".bottom-pill"),

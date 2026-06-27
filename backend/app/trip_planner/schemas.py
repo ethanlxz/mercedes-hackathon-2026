@@ -4,6 +4,7 @@ from typing import Literal
 from pydantic import BaseModel, Field
 
 from backend.app.schemas.routes import RouteResponse, RouteSummary, RouteWaypoint
+from backend.app.schemas.preferences import PreferenceMemoryResponse
 
 
 class LocationTagsResponse(BaseModel):
@@ -19,6 +20,7 @@ class LocationTagRequest(BaseModel):
 class UserSettingsResponse(BaseModel):
     currentLocation: str = ""
     evBatteryLevel: int = Field(default=82, ge=0, le=100)
+    preferenceMemory: PreferenceMemoryResponse = Field(default_factory=PreferenceMemoryResponse)
 
 
 class CurrentLocationRequest(BaseModel):
@@ -56,6 +58,8 @@ class RoadTripPlannerRequest(BaseModel):
 
 
 class RoadTripRecommendation(BaseModel):
+    id: str
+    placeId: str = ""
     name: str
     address: str
     latitude: float

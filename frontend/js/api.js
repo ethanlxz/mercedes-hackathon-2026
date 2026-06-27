@@ -102,6 +102,27 @@ async function acceptRestStopRecommendation(notification) {
   });
 }
 
+async function sendPreferenceFeedback(recommendation, action) {
+  return requestJson("/api/central-agent/preferences/feedback", {
+    method: "POST",
+    body: JSON.stringify({
+      action,
+      id: recommendation.id || "",
+      placeId: recommendation.placeId || "",
+      name: recommendation.name || "",
+      address: recommendation.address || "",
+      category: recommendation.category || recommendation.section || "Stop",
+      section: recommendation.section || "route",
+    }),
+  });
+}
+
+async function resetPreferenceMemory() {
+  return requestJson("/api/central-agent/preferences", {
+    method: "DELETE",
+  });
+}
+
 async function requestBatterySummary() {
   const health = await requestJson("/api/battery/health");
   const summary = await requestJson("/api/battery/model/summary");

@@ -26,6 +26,13 @@ elements.editTagsButton.addEventListener("click", switchToTagsMode);
 elements.settingsButton.addEventListener("click", switchToSettingsMode);
 elements.tripButton.addEventListener("click", submitTripPlan);
 elements.roadTripButton.addEventListener("click", submitRoadTripPlan);
+[
+  elements.routeRecommendations,
+  elements.destinationRecommendations,
+  elements.foodRecommendations,
+].forEach((container) => {
+  container.addEventListener("click", handleRecommendationActionClick);
+});
 if (elements.roadTripCloseButton) {
   elements.roadTripCloseButton.addEventListener("click", closeRoadTripPanel);
 }
@@ -51,6 +58,7 @@ elements.saveHomeButton.addEventListener("click", () => saveTag("home"));
 elements.saveWorkButton.addEventListener("click", () => saveTag("work"));
 elements.saveCurrentLocationButton.addEventListener("click", saveCurrentLocation);
 elements.saveEvBatteryLevelButton.addEventListener("click", saveEVBatteryLevel);
+elements.preferenceMemoryResetButton.addEventListener("click", resetSettingsPreferenceMemory);
 elements.evBatteryLevelInput.addEventListener("input", (event) => {
   renderEVBatteryWidget(event.target.value);
 });

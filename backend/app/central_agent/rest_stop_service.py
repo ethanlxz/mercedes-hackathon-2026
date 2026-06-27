@@ -1,5 +1,6 @@
 import math
 from dataclasses import dataclass
+from typing import Any
 
 from backend.app.central_agent.schemas import GeoLocation, RestStopPlace
 from backend.app.central_agent.state import ActiveRoadTrip
@@ -109,12 +110,35 @@ def _place_to_rest_stop(place: ResolvedPlace) -> RestStopPlace:
 def rank_rest_stop_candidates(
     candidates: list[RestStopCandidate],
     severity: str,
+    preference_memory: dict[str, Any] | None = None,
 ) -> list[RestStopCandidate]:
     severity_weight = {"critical": 0.7, "high": 0.85}.get(severity, 1.0)
+    preference_memory = preference_memory or {}
+    preferred = {
+        str(category).lower(): int(count)
+        for category, count in (preference_memory.get("preferredStopTypes") or {}).items()
+        if str(category).strip()
+    }
+    disliked = {
+        str(category).lower(): int(count)
+        for category, count in (preference_memory.get("dislikedStopTypes") or {}).items()
+        if str(category).strip()
+    }
+
+    def adjusted_drive_seconds(candidate: RestStopCandidate) -> float:
+        category = candidate.category.lower()
+        preference_boost = min(preferred.get(category, 0), 5) * 35
+        dislike_penalty = min(disliked.get(category, 0), 5) * 45
+        return (
+            candidate.estimated_drive_seconds * severity_weight
+            - preference_boost
+            + dislike_penalty
+        )
+
     return sorted(
         candidates,
         key=lambda candidate: (
-            candidate.estimated_drive_seconds * severity_weight,
+            adjusted_drive_seconds(candidate),
             candidate.route_distance_meters,
             -(candidate.place.rating or 0),
             -(candidate.place.userRatingCount or 0),
@@ -129,6 +153,7 @@ async def find_rest_stop_candidates(
     location: GeoLocation | None,
     severity: str,
     api_key: str,
+    preference_memory: dict[str, Any] | None = None,
 ) -> list[RestStopCandidate]:
     path = _decode_polyline(active_route.route.encodedPolyline)
     current = _current_point(path, location)
@@ -170,5 +195,4 @@ async def find_rest_stop_candidates(
                     )
                 )
 
-    return rank_rest_stop_candidates(candidates, severity)
-
+    return rank_rest_stop_candidates(candidates, severity, preference_memory)

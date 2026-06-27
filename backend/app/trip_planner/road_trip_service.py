@@ -1,3 +1,4 @@
+import hashlib
 import json
 import math
 import re
@@ -9,6 +10,7 @@ from pydantic import BaseModel, Field, ValidationError
 from backend.app.trip_planner.schemas import RoadTripRecommendation, RoadTripPlannerResponse
 from backend.app.services.google_places import ResolvedPlace, search_places
 from backend.app.services.google_routes import compute_route
+from backend.app.services.memory_service import get_central_agent_memory
 from backend.app.services.place_categories import google_place_type_for_category
 
 
@@ -155,10 +157,12 @@ async def _search_candidates(
     max_result_count: int = 2,
     query_context: str = "",
     result_radius_meters: int | None = None,
+    preference_memory: dict[str, Any] | None = None,
 ) -> list[RecommendationCandidate]:
     candidates: list[RecommendationCandidate] = []
+    ordered_searches = _ordered_searches(searches, preference_memory or {})
     for route_index, point in enumerate(points):
-        for query, category, section in searches:
+        for query, category, section in ordered_searches:
             included_type = google_place_type_for_category(query)
             text_query = f"{query} in {query_context}" if query_context else query
             places = await search_places(
@@ -203,6 +207,77 @@ def _candidate_payload(candidate: RecommendationCandidate) -> dict[str, Any]:
     }
 
 
+def _normalized_category(value: str) -> str:
+    return " ".join(str(value or "").strip().lower().split())
+
+
+def _preference_count(
+    preference_memory: dict[str, Any],
+    key: str,
+    category: str,
+) -> int:
+    counts = preference_memory.get(key) or {}
+    if not isinstance(counts, dict):
+        return 0
+    normalized = _normalized_category(category)
+    for raw_category, raw_count in counts.items():
+        if _normalized_category(str(raw_category)) != normalized:
+            continue
+        try:
+            return max(0, int(raw_count))
+        except (TypeError, ValueError):
+            return 0
+    return 0
+
+
+def _preference_score(
+    preference_memory: dict[str, Any],
+    category: str,
+) -> int:
+    return (
+        _preference_count(preference_memory, "preferredStopTypes", category)
+        - _preference_count(preference_memory, "dislikedStopTypes", category)
+    )
+
+
+def _ordered_searches(
+    searches: tuple[tuple[str, str, str], ...],
+    preference_memory: dict[str, Any],
+) -> list[tuple[str, str, str]]:
+    return sorted(
+        searches,
+        key=lambda item: (
+            -_preference_score(preference_memory, item[1]),
+            searches.index(item),
+        ),
+    )
+
+
+def _preference_prompt(preference_memory: dict[str, Any]) -> str:
+    preferred = preference_memory.get("preferredStopTypes") or {}
+    disliked = preference_memory.get("dislikedStopTypes") or {}
+    preferred_text = ", ".join(
+        category
+        for category, _ in sorted(
+            preferred.items(),
+            key=lambda item: (-int(item[1]), str(item[0]).lower()),
+        )[:5]
+    )
+    disliked_text = ", ".join(
+        category
+        for category, _ in sorted(
+            disliked.items(),
+            key=lambda item: (-int(item[1]), str(item[0]).lower()),
+        )[:5]
+    )
+    if not preferred_text and not disliked_text:
+        return "No learned stop preferences yet."
+    return (
+        f"Soft user preferences: prefer [{preferred_text or 'none'}]; "
+        f"deprioritize [{disliked_text or 'none'}]."
+    )
+
+
 def _fallback_explanation(candidate: RecommendationCandidate) -> str:
     place = candidate.place
     rating = f" It has a {place.rating:g} Google rating." if place.rating else ""
@@ -243,6 +318,7 @@ async def _explain_with_deepseek(
     deepseek_api_key: str,
     deepseek_model: str,
     deepseek_base_url: str,
+    preference_memory: dict[str, Any] | None = None,
 ) -> dict[str, str]:
     if not candidates or not deepseek_api_key:
         return {}
@@ -272,6 +348,7 @@ reviews, opening hours, history, or menu items. Return JSON only:
 }}
 
 Choose the best mix of along-route stops, destination attractions, and food.
+{_preference_prompt(preference_memory or {})}
 Mention why it is useful for this road trip. For food, mention cuisine/category
 only if it is clear from the place name or category.
 
@@ -301,6 +378,8 @@ def _recommendation_from_candidate(
 ) -> RoadTripRecommendation:
     place = candidate.place
     return RoadTripRecommendation(
+        id=_recommendation_id(candidate),
+        placeId=place.place_id,
         name=place.label,
         address=place.address,
         latitude=float(place.latitude),
@@ -314,12 +393,21 @@ def _recommendation_from_candidate(
     )
 
 
+def _recommendation_id(candidate: RecommendationCandidate) -> str:
+    place = candidate.place
+    raw = place.place_id or f"{candidate.section}|{place.label}|{place.address}"
+    digest = hashlib.sha1(raw.encode("utf-8")).hexdigest()[:12]
+    return f"{candidate.section}-{digest}"
+
+
 def _select_recommendations(
     candidates: list[RecommendationCandidate],
     explanations: dict[str, str],
     section: str,
     limit: int,
+    preference_memory: dict[str, Any] | None = None,
 ) -> list[RoadTripRecommendation]:
+    preference_memory = preference_memory or {}
     deepseek_order = {
         key: index
         for index, key in enumerate(explanations)
@@ -327,6 +415,7 @@ def _select_recommendations(
     ordered_candidates = sorted(
         candidates,
         key=lambda candidate: (
+            -_preference_score(preference_memory, candidate.category),
             deepseek_order.get(_candidate_explanation_key(candidate), 10_000),
             candidate.route_index,
             -(candidate.place.rating or 0),
@@ -355,6 +444,7 @@ async def plan_road_trip(
     deepseek_model: str,
     deepseek_base_url: str,
 ) -> RoadTripPlannerResponse:
+    preference_memory = get_central_agent_memory()
     route = await compute_route(
         origin=origin,
         destination=destination,
@@ -368,6 +458,7 @@ async def plan_road_trip(
         ROUTE_SEARCHES,
         _sample_route_points(path),
         google_maps_server_key,
+        preference_memory=preference_memory,
     )
     destination_candidates = await _search_candidates(
         DESTINATION_SEARCHES,
@@ -376,6 +467,7 @@ async def plan_road_trip(
         max_result_count=4,
         query_context=destination,
         result_radius_meters=DESTINATION_SEARCH_RADIUS_METERS,
+        preference_memory=preference_memory,
     )
     candidates = [*route_candidates, *destination_candidates]
     explanations = await _explain_with_deepseek(
@@ -385,16 +477,30 @@ async def plan_road_trip(
         deepseek_api_key,
         deepseek_model,
         deepseek_base_url,
+        preference_memory,
     )
 
     return RoadTripPlannerResponse(
         route=route,
-        routeRecommendations=_select_recommendations(candidates, explanations, "route", 5),
+        routeRecommendations=_select_recommendations(
+            candidates,
+            explanations,
+            "route",
+            5,
+            preference_memory,
+        ),
         destinationRecommendations=_select_recommendations(
             candidates,
             explanations,
             "destination",
             DESTINATION_RECOMMENDATION_LIMIT,
+            preference_memory,
         ),
-        foodRecommendations=_select_recommendations(candidates, explanations, "food", 4),
+        foodRecommendations=_select_recommendations(
+            candidates,
+            explanations,
+            "food",
+            4,
+            preference_memory,
+        ),
     )

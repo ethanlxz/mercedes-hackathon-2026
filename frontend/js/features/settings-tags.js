@@ -87,7 +87,19 @@ async function loadSettings() {
   const payload = await requestSettings();
   state.settings.currentLocation = payload.currentLocation || "";
   state.settings.evBatteryLevel = normalizeEVBatteryLevel(payload.evBatteryLevel);
+  state.preferenceMemory = normalizePreferenceMemory(payload.preferenceMemory);
   syncSettingsInputs();
+}
+
+function normalizePreferenceMemory(payload) {
+  return {
+    preferredStopTypes: Array.isArray(payload?.preferredStopTypes)
+      ? payload.preferredStopTypes
+      : [],
+    dislikedStopTypes: Array.isArray(payload?.dislikedStopTypes)
+      ? payload.dislikedStopTypes
+      : [],
+  };
 }
 
 async function saveTag(tag) {
@@ -137,5 +149,51 @@ function syncSettingsInputs() {
   elements.currentLocationDisplay.textContent = state.settings.currentLocation || "Not set";
   elements.evBatteryLevelInput.value = String(state.settings.evBatteryLevel);
   renderEVBatteryWidget(state.settings.evBatteryLevel);
+  syncPreferenceMemoryUI();
+}
+
+function preferenceMemoryMarkup(items, emptyText) {
+  if (!items.length) {
+    return `<p class="preference-memory-empty">${escapeHtml(emptyText)}</p>`;
+  }
+  return `
+    <ul class="preference-memory-list">
+      ${items.map((item) => `
+        <li>
+          <span>${escapeHtml(item.category)}</span>
+          <em>${Number(item.count) || 0}</em>
+        </li>
+      `).join("")}
+    </ul>
+  `;
+}
+
+function syncPreferenceMemoryUI() {
+  if (!elements.preferenceMemoryPrefers || !elements.preferenceMemoryDislikes) {
+    return;
+  }
+  elements.preferenceMemoryPrefers.innerHTML = preferenceMemoryMarkup(
+    state.preferenceMemory.preferredStopTypes || [],
+    "No preferred stop types yet.",
+  );
+  elements.preferenceMemoryDislikes.innerHTML = preferenceMemoryMarkup(
+    state.preferenceMemory.dislikedStopTypes || [],
+    "No disliked stop types yet.",
+  );
+}
+
+async function resetSettingsPreferenceMemory() {
+  setButtonLoading(elements.preferenceMemoryResetButton, true, "Reset");
+
+  try {
+    const payload = await resetPreferenceMemory();
+    state.preferenceMemory = normalizePreferenceMemory(payload);
+    syncPreferenceMemoryUI();
+    setStatus("Preference memory reset.");
+  } catch (error) {
+    setStatus(error.message || "Could not reset preference memory.", true);
+  } finally {
+    setButtonLoading(elements.preferenceMemoryResetButton, false, "Reset");
+  }
 }
 

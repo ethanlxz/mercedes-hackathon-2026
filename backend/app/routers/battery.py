@@ -8,7 +8,7 @@ from backend.app.battery.model_service import ModelService, WEEKDAYS
 
 
 ROOT_DIR = Path(__file__).resolve().parents[3]
-DATASET_PATH = ROOT_DIR / "backend" / "data" / "battery" / "mercedes_ev_100day_dataset_weekend_fixed.xlsx"
+DATASET_PATH = ROOT_DIR / "backend" / "data" / "battery" / "500_ev.xlsx"
 MODEL_DIR = ROOT_DIR / "backend" / "data" / "battery" / "models"
 
 router = APIRouter(prefix="/api/battery", tags=["battery"])

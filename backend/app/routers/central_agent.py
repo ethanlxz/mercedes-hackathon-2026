@@ -1,6 +1,11 @@
 from fastapi import APIRouter, Depends
 
-from backend.app.central_agent.graph import accept_rest_stop, recommend_rest_stop
+from backend.app.central_agent.graph import (
+    accept_rest_stop,
+    recommend_rest_stop,
+    record_preference_feedback,
+    reset_preference_memory,
+)
 from backend.app.central_agent.schemas import (
     ActiveRoadTripRequest,
     ActiveRoadTripResponse,
@@ -10,7 +15,12 @@ from backend.app.central_agent.schemas import (
 )
 from backend.app.central_agent.state import store_active_road_trip
 from backend.app.core.config import Settings, get_settings
+from backend.app.schemas.preferences import (
+    PreferenceMemoryResponse,
+    StopPreferenceFeedbackRequest,
+)
 from backend.app.schemas.routes import RouteResponse
+from backend.app.services.memory_service import get_preference_memory_summary
 
 
 router = APIRouter(prefix="/api/central-agent", tags=["central-agent"])
@@ -41,3 +51,19 @@ async def rest_stop_accept(
 ) -> RouteResponse:
     return await accept_rest_stop(request, settings.google_maps_server_key)
 
+
+@router.get("/preferences", response_model=PreferenceMemoryResponse)
+async def central_agent_preferences() -> PreferenceMemoryResponse:
+    return get_preference_memory_summary()
+
+
+@router.post("/preferences/feedback", response_model=PreferenceMemoryResponse)
+async def central_agent_preference_feedback(
+    request: StopPreferenceFeedbackRequest,
+) -> PreferenceMemoryResponse:
+    return await record_preference_feedback(request)
+
+
+@router.delete("/preferences", response_model=PreferenceMemoryResponse)
+async def central_agent_preference_reset() -> PreferenceMemoryResponse:
+    return await reset_preference_memory()

@@ -16,6 +16,7 @@ from backend.app.services.google_places import search_place, search_places
 from backend.app.services.google_routes import compute_route
 from backend.app.services.location_context import origin_or_default
 from backend.app.services.memory_service import (
+    get_preference_memory_summary,
     get_location_tags,
     get_user_settings,
     set_ev_battery_level,
@@ -82,7 +83,10 @@ def save_location_tag(request: LocationTagRequest) -> LocationTagsResponse:
 
 @router.get("/settings", response_model=UserSettingsResponse)
 def user_settings() -> UserSettingsResponse:
-    return UserSettingsResponse(**get_user_settings())
+    return UserSettingsResponse(
+        **get_user_settings(),
+        preferenceMemory=get_preference_memory_summary(),
+    )
 
 
 @router.post("/settings/current-location", response_model=UserSettingsResponse)

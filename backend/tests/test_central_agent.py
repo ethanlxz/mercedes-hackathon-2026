@@ -155,6 +155,11 @@ async def test_accepting_rest_stop_returns_route_response(monkeypatch):
         "compute_multi_stop_route",
         fake_compute_multi_stop_route,
     )
+    monkeypatch.setattr(
+        agent_graph,
+        "record_stop_preference_feedback",
+        lambda feedback: feedback,
+    )
 
     route = await agent_graph.accept_rest_stop(
         RestStopAcceptRequest(
@@ -193,3 +198,28 @@ def test_candidate_ranking_prefers_closer_route_stop():
     ranked = rank_rest_stop_candidates([far, close], "warning")
 
     assert ranked[0].place.name == "Close R&R"
+
+
+def test_candidate_ranking_uses_preferred_stop_type_as_soft_signal():
+    cafe = RestStopCandidate(
+        place=RestStopPlace(name="Loved Cafe", address="Cafe address", rating=4.2),
+        category="Cafe",
+        distance_meters=9500,
+        route_distance_meters=120,
+        estimated_drive_seconds=430,
+    )
+    rnr = RestStopCandidate(
+        place=RestStopPlace(name="Neutral R&R", address="R&R address", rating=4.7),
+        category="R&R",
+        distance_meters=9000,
+        route_distance_meters=120,
+        estimated_drive_seconds=420,
+    )
+
+    ranked = rank_rest_stop_candidates(
+        [rnr, cafe],
+        "warning",
+        {"preferredStopTypes": {"Cafe": 2}, "dislikedStopTypes": {}},
+    )
+
+    assert ranked[0].place.name == "Loved Cafe"
