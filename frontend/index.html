@@ -376,6 +376,27 @@
           </div>
         </aside>
 
+        <aside
+          id="charging-plan-modal"
+          class="charging-plan-modal hidden"
+          aria-hidden="true"
+          aria-label="Charging Plan"
+        >
+          <header class="charging-plan-modal-header">
+            <div>
+              <span>
+                <i class="fa-solid fa-charging-station" aria-hidden="true"></i>
+                Charging Plan
+              </span>
+              <strong id="charging-plan-modal-title">Charge estimate</strong>
+            </div>
+            <button id="charging-plan-close-button" class="charging-plan-close-button" type="button" aria-label="Close charging plan">
+              <i class="fa-solid fa-xmark" aria-hidden="true"></i>
+            </button>
+          </header>
+          <div id="charging-plan-card" class="charging-plan-card"></div>
+        </aside>
+
         <div id="trip-choice-modal" class="trip-choice-modal hidden" aria-hidden="true">
           <div class="trip-choice-dialog" role="dialog" aria-modal="true" aria-labelledby="trip-choice-title">
             <div class="trip-choice-header">

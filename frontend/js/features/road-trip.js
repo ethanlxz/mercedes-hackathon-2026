@@ -83,6 +83,225 @@ function createRecommendationMarker(recommendation) {
   return marker;
 }
 
+function createChargingMarker(station, recommendation, index) {
+  const place = station?.place;
+  const position = {
+    lat: Number(place?.latitude),
+    lng: Number(place?.longitude),
+  };
+  if (!Number.isFinite(position.lat) || !Number.isFinite(position.lng)) {
+    return null;
+  }
+
+  const marker = new google.maps.Marker({
+    position,
+    map: state.map,
+    label: {
+      text: "C",
+      color: "#ffffff",
+      fontSize: "12px",
+      fontWeight: "900",
+    },
+    icon: {
+      path: google.maps.SymbolPath.CIRCLE,
+      scale: 12,
+      fillColor: "#22c55e",
+      fillOpacity: 1,
+      strokeColor: "#ffffff",
+      strokeOpacity: 0.95,
+      strokeWeight: 3,
+    },
+    title: `${place.name}: ${place.address}`,
+    zIndex: 60 + index,
+  });
+
+  const hoverWaypoint = {
+    role: "charging",
+    label: place.name,
+    address: place.address,
+    rating: place.rating,
+    userRatingCount: place.userRatingCount,
+    category: "Charging Plan",
+    explanation: station.distanceLabel || recommendation.message,
+  };
+
+  marker.addListener("mouseover", () => {
+    showPinHoverCard(marker.getPosition(), hoverWaypoint);
+  });
+  marker.addListener("mouseout", () => {
+    hidePinHoverCard();
+  });
+  marker.addListener("click", () => {
+    showPinHoverCard(marker.getPosition(), hoverWaypoint);
+  });
+
+  marker.chargingRecommendationId = `${recommendation.id}-${index}`;
+  return marker;
+}
+
+function formatBatteryPercent(value) {
+  const number = Number(value);
+  if (!Number.isFinite(number)) {
+    return "--%";
+  }
+  return `${number.toFixed(1).replace(/\.0$/, "")}%`;
+}
+
+function chargingDecisionTone(decision) {
+  if (decision === "no_charging_required") {
+    return "ready";
+  }
+  if (decision === "charge_during_trip") {
+    return "critical";
+  }
+  return "warning";
+}
+
+function chargingStations(recommendation) {
+  if (Array.isArray(recommendation?.stations) && recommendation.stations.length) {
+    return recommendation.stations;
+  }
+  if (recommendation?.place) {
+    return [{
+      place: recommendation.place,
+      distanceLabel: recommendation.distanceLabel || "",
+      estimatedDriveSeconds: recommendation.estimatedDriveSeconds,
+      distanceMeters: recommendation.distanceMeters,
+    }];
+  }
+  return [];
+}
+
+function chargingStationMarkup(recommendation) {
+  const stations = chargingStations(recommendation);
+  if (!stations.length) {
+    if (!recommendation.chargingRequired) {
+      return "";
+    }
+    return `
+      <div class="charging-station-card charging-station-empty">
+        <span>No charger found nearby yet</span>
+        <p>The trip still needs charging. Try a broader origin or destination if this keeps happening.</p>
+      </div>
+    `;
+  }
+
+  return `
+    <div class="charging-station-list">
+      ${stations.map((station, index) => {
+        const place = station.place || {};
+        const rating = formatRating(place.rating);
+        const reviewCount = formatReviewCount(place.userRatingCount);
+        const ratingText = rating
+          ? `${rating} Google rating${reviewCount ? ` / ${reviewCount}` : ""}`
+          : "Google rating unavailable";
+        const mapsLink = place.googleMapsUri
+          ? `<a href="${escapeHtml(place.googleMapsUri)}" target="_blank" rel="noreferrer">Open in Maps</a>`
+          : "";
+        const action = recommendation.chargingRequired
+          ? `
+            <button class="charging-add-button" type="button" data-charging-action="accept" data-charging-index="${index}">
+              <i class="fa-solid fa-plus" aria-hidden="true"></i>
+              Add stop
+            </button>
+          `
+          : "";
+
+        return `
+          <article class="charging-station-card">
+            <div class="charging-station-icon" aria-hidden="true">
+              <i class="fa-solid fa-charging-station"></i>
+            </div>
+            <div class="charging-station-body">
+              <span>${escapeHtml(station.distanceLabel || recommendation.distanceLabel || "Recommended charger")}</span>
+              <strong>${escapeHtml(place.name || "Charging station")}</strong>
+              <p>${escapeHtml(place.address || "Address unavailable")}</p>
+              <em>${escapeHtml(ratingText)}</em>
+              <div class="charging-station-actions">
+                ${mapsLink}
+                ${action}
+              </div>
+            </div>
+          </article>
+        `;
+      }).join("")}
+    </div>
+  `;
+}
+
+function renderChargingPlan(recommendation, errorMessage = "") {
+  if (!elements.chargingPlanModal || !elements.chargingPlanCard) {
+    return;
+  }
+
+  state.roadTripChargingRecommendation = recommendation || null;
+  elements.chargingPlanModal.classList.remove("hidden");
+  elements.chargingPlanModal.setAttribute("aria-hidden", "false");
+
+  if (!recommendation) {
+    elements.chargingPlanModal.dataset.decision = "unavailable";
+    if (elements.chargingPlanModalTitle) {
+      elements.chargingPlanModalTitle.textContent = "Battery estimate unavailable";
+    }
+    elements.chargingPlanCard.innerHTML = `
+      <article class="charging-plan-summary charging-plan-unavailable">
+        <div class="charging-plan-topline">
+          <span>Charging Plan</span>
+          <em>Unavailable</em>
+        </div>
+        <strong>Battery estimate unavailable</strong>
+        <p>${escapeHtml(errorMessage || "The route is ready, but the charging recommendation could not be calculated.")}</p>
+      </article>
+    `;
+    return;
+  }
+
+  const tone = chargingDecisionTone(recommendation.decision);
+  elements.chargingPlanModal.dataset.decision = recommendation.decision;
+  if (elements.chargingPlanModalTitle) {
+    elements.chargingPlanModalTitle.textContent = recommendation.title || "Charge estimate";
+  }
+  elements.chargingPlanCard.innerHTML = `
+    <article class="charging-plan-summary charging-plan-${escapeHtml(tone)}">
+      <div class="charging-plan-topline">
+        <span>${escapeHtml(recommendation.title || "Charging Plan")}</span>
+        <em>${recommendation.chargingRequired ? "Charging needed" : "Ready"}</em>
+      </div>
+      <strong>${escapeHtml(recommendation.message || "Charging recommendation ready.")}</strong>
+      <div class="charging-metrics" aria-label="Charging battery metrics">
+        <div>
+          <span>Current</span>
+          <strong>${escapeHtml(formatBatteryPercent(recommendation.currentBatteryPercent))}</strong>
+        </div>
+        <div>
+          <span>Estimate</span>
+          <strong>${escapeHtml(formatBatteryPercent(recommendation.requiredBatteryPercent))}</strong>
+        </div>
+        <div>
+          <span>Arrival</span>
+          <strong>${escapeHtml(formatBatteryPercent(recommendation.remainingBatteryPercent))}</strong>
+        </div>
+      </div>
+      ${chargingStationMarkup(recommendation)}
+    </article>
+  `;
+
+  chargingStations(recommendation).forEach((station, index) => {
+    const marker = createChargingMarker(station, recommendation, index);
+    if (marker) {
+      state.markers.push(marker);
+    }
+  });
+}
+
+function closeChargingPlanModal() {
+  if (!elements.chargingPlanModal) {
+    return;
+  }
+  elements.chargingPlanModal.classList.add("hidden");
+  elements.chargingPlanModal.setAttribute("aria-hidden", "true");
+}
+
 function findRecommendation(id) {
   return state.roadTripRecommendations.find((recommendation) => recommendation.id === id);
 }
@@ -342,6 +561,7 @@ function renderRoadTripResults(payload) {
 
   state.roadTripRecommendations = allRecommendations;
   elements.roadTripResults.classList.remove("hidden");
+  renderChargingPlan(payload.chargingRecommendation, payload.chargingError || "");
   renderRecommendationGroup(elements.routeRecommendations, routeRecommendations);
   renderRecommendationGroup(elements.destinationRecommendations, destinationRecommendations);
   renderRecommendationGroup(elements.foodRecommendations, foodRecommendations);
@@ -352,5 +572,47 @@ function renderRoadTripResults(payload) {
       state.markers.push(marker);
     }
   });
+}
+
+async function acceptChargingStop(index) {
+  const recommendation = state.roadTripChargingRecommendation;
+  const station = chargingStations(recommendation)[index] || null;
+  const place = station?.place || null;
+  if (!place) {
+    setRoadTripStatus("No charging station is available to add yet.", true);
+    return;
+  }
+
+  const button = document.querySelector(`[data-charging-action='accept'][data-charging-index="${index}"]`);
+  if (button) {
+    button.disabled = true;
+    button.textContent = "Adding...";
+  }
+
+  try {
+    const route = await acceptChargingRecommendation(recommendation, place);
+    await renderRoute(route);
+    recommendation.added = true;
+    if (button) {
+      button.textContent = "Added to route";
+      button.disabled = true;
+    }
+    setRoadTripStatus("Charging stop added to your route.");
+  } catch (error) {
+    setRoadTripStatus(error.message || "Could not add that charging stop.", true);
+    if (button) {
+      button.disabled = false;
+      button.innerHTML = '<i class="fa-solid fa-plus" aria-hidden="true"></i> Add charger stop';
+    }
+  }
+}
+
+function handleChargingPlanClick(event) {
+  const button = event.target.closest("[data-charging-action='accept']");
+  if (!button) {
+    return;
+  }
+  event.preventDefault();
+  acceptChargingStop(Number(button.dataset.chargingIndex) || 0);
 }
 

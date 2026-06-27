@@ -65,9 +65,19 @@ async function submitRoadTripPlan() {
   try {
     const plan = await requestRoadTrip(origin, destination);
     await renderRoute(plan.route);
-    await registerActiveRoadTrip(origin, destination, plan.route);
+    const activeRoadTrip = await registerActiveRoadTrip(origin, destination, plan.route);
+    try {
+      const chargingPayload = await requestChargingRecommendation(activeRoadTrip.activeRouteId);
+      plan.chargingRecommendation = chargingPayload.recommendation;
+    } catch (chargingError) {
+      plan.chargingError = chargingError.message || "Charging recommendation unavailable.";
+    }
     renderRoadTripResults(plan);
-    setRoadTripStatus("Road trip recommendations ready.");
+    setRoadTripStatus(
+      plan.chargingError
+        ? "Road trip ready. Charging plan unavailable."
+        : "Road trip recommendations and charging plan ready.",
+    );
   } catch (error) {
     setRoadTripStatus(error.message || "Could not plan that road trip.", true);
   } finally {

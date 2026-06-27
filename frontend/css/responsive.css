@@ -85,6 +85,37 @@
     font-size: 18px;
   }
 
+  .charging-metrics,
+  .charging-station-card {
+    grid-template-columns: 1fr;
+  }
+
+  .charging-plan-modal {
+    top: 74px;
+    right: 14px;
+    width: min(360px, calc(100% - 28px));
+    max-height: calc(100vh - 148px);
+    padding: 13px;
+    border-radius: 16px;
+  }
+
+  .charging-plan-modal-header strong {
+    font-size: 16px;
+  }
+
+  .charging-station-icon {
+    display: none;
+  }
+
+  .charging-station-actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .charging-add-button {
+    width: 100%;
+  }
+
   .battery-heading {
     display: grid;
     gap: 12px;

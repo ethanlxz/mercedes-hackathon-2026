@@ -97,6 +97,13 @@ class ChargingRecommendationRequest(BaseModel):
     activeRouteId: str = Field(..., min_length=1, max_length=100)
 
 
+class ChargingStationOption(BaseModel):
+    place: RestStopPlace
+    distanceLabel: str = ""
+    estimatedDriveSeconds: int | None = None
+    distanceMeters: int | None = None
+
+
 class ChargingRecommendation(BaseModel):
     id: str
     source: Literal["charging_decision"] = "charging_decision"
@@ -109,7 +116,9 @@ class ChargingRecommendation(BaseModel):
     remainingBatteryPercent: float
     tripDistanceKm: float
     triggerDistanceKm: float | None = None
+    distanceLabel: str = ""
     place: RestStopPlace | None = None
+    stations: list[ChargingStationOption] = Field(default_factory=list)
     estimatedDriveSeconds: int | None = None
     distanceMeters: int | None = None
     primaryAction: NotificationAction = Field(

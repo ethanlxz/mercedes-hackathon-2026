@@ -39,6 +39,7 @@ const state = {
   plannerThreadId: "",
   plannerAwaitingClarification: false,
   roadTripRecommendations: [],
+  roadTripChargingRecommendation: null,
   batterySummary: null,
 };
 
@@ -74,6 +75,10 @@ const elements = {
   roadTripCloseButton: document.querySelector("#road-trip-close-button"),
   roadTripStatus: document.querySelector("#road-trip-status"),
   roadTripResults: document.querySelector("#road-trip-results"),
+  chargingPlanModal: document.querySelector("#charging-plan-modal"),
+  chargingPlanCloseButton: document.querySelector("#charging-plan-close-button"),
+  chargingPlanModalTitle: document.querySelector("#charging-plan-modal-title"),
+  chargingPlanCard: document.querySelector("#charging-plan-card"),
   routeRecommendations: document.querySelector("#route-recommendations"),
   destinationRecommendations: document.querySelector("#destination-recommendations"),
   foodRecommendations: document.querySelector("#food-recommendations"),

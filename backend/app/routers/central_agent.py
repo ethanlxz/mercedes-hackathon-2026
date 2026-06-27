@@ -1,5 +1,9 @@
 from fastapi import APIRouter, Depends
 
+from backend.app.central_agent.charging_service import (
+    accept_charging_stop,
+    recommend_charging,
+)
 from backend.app.central_agent.graph import (
     accept_rest_stop,
     recommend_rest_stop,
@@ -9,6 +13,9 @@ from backend.app.central_agent.graph import (
 from backend.app.central_agent.schemas import (
     ActiveRoadTripRequest,
     ActiveRoadTripResponse,
+    ChargingRecommendationRequest,
+    ChargingRecommendationResponse,
+    ChargingStopAcceptRequest,
     FatigueRecommendationRequest,
     FatigueRecommendationResponse,
     RestStopAcceptRequest,
@@ -50,6 +57,22 @@ async def rest_stop_accept(
     settings: Settings = Depends(get_settings),
 ) -> RouteResponse:
     return await accept_rest_stop(request, settings.google_maps_server_key)
+
+
+@router.post("/charging/recommendation", response_model=ChargingRecommendationResponse)
+async def charging_recommendation(
+    request: ChargingRecommendationRequest,
+    settings: Settings = Depends(get_settings),
+) -> ChargingRecommendationResponse:
+    return await recommend_charging(request, settings.google_maps_server_key)
+
+
+@router.post("/charging/accept", response_model=RouteResponse)
+async def charging_accept(
+    request: ChargingStopAcceptRequest,
+    settings: Settings = Depends(get_settings),
+) -> RouteResponse:
+    return await accept_charging_stop(request, settings.google_maps_server_key)
 
 
 @router.get("/preferences", response_model=PreferenceMemoryResponse)

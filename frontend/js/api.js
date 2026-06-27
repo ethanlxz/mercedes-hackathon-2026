@@ -102,6 +102,24 @@ async function acceptRestStopRecommendation(notification) {
   });
 }
 
+async function requestChargingRecommendation(activeRouteId) {
+  return requestJson("/api/central-agent/charging/recommendation", {
+    method: "POST",
+    body: JSON.stringify({ activeRouteId }),
+  });
+}
+
+async function acceptChargingRecommendation(recommendation, place) {
+  return requestJson("/api/central-agent/charging/accept", {
+    method: "POST",
+    body: JSON.stringify({
+      activeRouteId: state.centralAgent.activeRouteId,
+      notificationId: recommendation.id,
+      place,
+    }),
+  });
+}
+
 async function sendPreferenceFeedback(recommendation, action) {
   return requestJson("/api/central-agent/preferences/feedback", {
     method: "POST",
