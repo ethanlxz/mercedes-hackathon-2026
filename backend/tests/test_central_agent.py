@@ -15,7 +15,7 @@ from backend.app.central_agent.state import (
     clear_active_road_trips,
     store_active_road_trip,
 )
-from backend.app.schemas.routes import RouteResponse, RouteSummary
+from backend.app.schemas.routes import RouteResponse, RouteSummary, RouteWaypoint
 
 
 def _route() -> RouteResponse:
@@ -177,6 +177,68 @@ async def test_accepting_rest_stop_returns_route_response(monkeypatch):
         "destination",
     ]
     assert route.waypoints[1].label == "Tapah R&R"
+
+
+@pytest.mark.asyncio
+async def test_accepting_rest_stop_preserves_existing_stops(monkeypatch):
+    active_route = _route()
+    active_route.waypoints = [
+        RouteWaypoint(role="origin", label="Start", address="Kuala Lumpur"),
+        RouteWaypoint(role="stop", label="Existing Cafe", address="Existing Cafe Address"),
+        RouteWaypoint(role="destination", label="Destination", address="Penang"),
+    ]
+    active = store_active_road_trip(
+        origin="Kuala Lumpur",
+        destination="Penang",
+        route=active_route,
+    )
+    place = RestStopPlace(
+        name="Tapah R&R",
+        address="North-South Expressway, Tapah",
+        placeId="tapah-rnr",
+        rating=4.3,
+        userRatingCount=800,
+    )
+
+    async def fake_compute_multi_stop_route(**kwargs):
+        assert kwargs["stops"] == [
+            "Existing Cafe Address",
+            "North-South Expressway, Tapah",
+        ]
+        assert kwargs["stop_place_ids"] == ["", "tapah-rnr"]
+        return RouteResponse(
+            duration="4200s",
+            distanceMeters=108000,
+            encodedPolyline="encoded",
+            summary=RouteSummary(durationText="1 hr 10 min", distanceText="108 km"),
+        )
+
+    monkeypatch.setattr(
+        agent_graph,
+        "compute_multi_stop_route",
+        fake_compute_multi_stop_route,
+    )
+    monkeypatch.setattr(
+        agent_graph,
+        "record_stop_preference_feedback",
+        lambda feedback: feedback,
+    )
+
+    route = await agent_graph.accept_rest_stop(
+        RestStopAcceptRequest(
+            activeRouteId=active.route_id,
+            notificationId="notification",
+            place=place,
+        ),
+        api_key="google-key",
+    )
+
+    assert [waypoint.label for waypoint in route.waypoints] == [
+        "Start",
+        "Existing Cafe",
+        "Tapah R&R",
+        "Destination",
+    ]
 
 
 def test_candidate_ranking_prefers_closer_route_stop():

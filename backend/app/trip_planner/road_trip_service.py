@@ -32,6 +32,9 @@ DESTINATION_SEARCHES: tuple[tuple[str, str, str], ...] = (
 
 DESTINATION_RECOMMENDATION_LIMIT = 8
 DESTINATION_SEARCH_RADIUS_METERS = 35_000
+ROUTE_RECOMMENDATION_LIMIT = 10
+ROUTE_SEARCH_RESULT_COUNT = 3
+ROUTE_RECOMMENDATION_MAX_DISTANCE_METERS = 8_000
 
 
 @dataclass(frozen=True)
@@ -86,13 +89,33 @@ def _decode_polyline(value: str) -> list[tuple[float, float]]:
 
 
 def _sample_route_points(path: list[tuple[float, float]]) -> list[tuple[float, float]]:
-    if len(path) <= 2:
+    if len(path) < 2:
         return path
 
+    segment_lengths = [
+        _distance_meters(start, end)
+        for start, end in zip(path, path[1:], strict=False)
+    ]
+    total_distance = sum(segment_lengths)
+    if total_distance <= 0:
+        return path[:1]
+
     samples: list[tuple[float, float]] = []
-    for fraction in (0.25, 0.5, 0.75):
-        index = min(len(path) - 1, max(0, round((len(path) - 1) * fraction)))
-        samples.append(path[index])
+    for fraction in (0.15, 0.3, 0.5, 0.7, 0.85):
+        target_distance = total_distance * fraction
+        traveled = 0.0
+        for index, segment_length in enumerate(segment_lengths):
+            next_traveled = traveled + segment_length
+            if target_distance <= next_traveled or index == len(segment_lengths) - 1:
+                start_lat, start_lng = path[index]
+                end_lat, end_lng = path[index + 1]
+                position = 0 if segment_length == 0 else (target_distance - traveled) / segment_length
+                samples.append((
+                    start_lat + (end_lat - start_lat) * position,
+                    start_lng + (end_lng - start_lng) * position,
+                ))
+                break
+            traveled = next_traveled
     return samples
 
 
@@ -139,6 +162,49 @@ def _distance_meters(
     return 2 * radius_meters * math.asin(min(1, math.sqrt(haversine)))
 
 
+def _distance_to_segment_meters(
+    point: tuple[float, float],
+    start: tuple[float, float],
+    end: tuple[float, float],
+) -> float:
+    lat, lng = point
+    start_lat, start_lng = start
+    end_lat, end_lng = end
+    reference_lat = math.radians((lat + start_lat + end_lat) / 3)
+    meters_per_degree_lat = 111_320
+    meters_per_degree_lng = 111_320 * math.cos(reference_lat)
+    px = lng * meters_per_degree_lng
+    py = lat * meters_per_degree_lat
+    ax = start_lng * meters_per_degree_lng
+    ay = start_lat * meters_per_degree_lat
+    bx = end_lng * meters_per_degree_lng
+    by = end_lat * meters_per_degree_lat
+    dx = bx - ax
+    dy = by - ay
+    if dx == 0 and dy == 0:
+        return math.hypot(px - ax, py - ay)
+    position = max(0, min(1, ((px - ax) * dx + (py - ay) * dy) / (dx * dx + dy * dy)))
+    closest_x = ax + position * dx
+    closest_y = ay + position * dy
+    return math.hypot(px - closest_x, py - closest_y)
+
+
+def _distance_to_route_meters(
+    candidate: RecommendationCandidate,
+    path: list[tuple[float, float]],
+) -> float:
+    place = candidate.place
+    if place.latitude is None or place.longitude is None:
+        return math.inf
+    point = (place.latitude, place.longitude)
+    if len(path) < 2:
+        return _distance_meters(point, path[0]) if path else math.inf
+    return min(
+        _distance_to_segment_meters(point, start, end)
+        for start, end in zip(path, path[1:], strict=False)
+    )
+
+
 def _within_radius(
     candidate: RecommendationCandidate,
     center: tuple[float, float],
@@ -157,6 +223,7 @@ async def _search_candidates(
     max_result_count: int = 2,
     query_context: str = "",
     result_radius_meters: int | None = None,
+    route_path: list[tuple[float, float]] | None = None,
     preference_memory: dict[str, Any] | None = None,
 ) -> list[RecommendationCandidate]:
     candidates: list[RecommendationCandidate] = []
@@ -186,6 +253,12 @@ async def _search_candidates(
     deduped = _dedupe_candidates(candidates)
     if result_radius_meters is None:
         return deduped
+    if route_path:
+        return [
+            candidate
+            for candidate in deduped
+            if _distance_to_route_meters(candidate, route_path) <= result_radius_meters
+        ]
     return [
         candidate
         for candidate in deduped
@@ -436,6 +509,68 @@ def _select_recommendations(
     return selected
 
 
+def _candidate_rank_key(
+    candidate: RecommendationCandidate,
+    explanations: dict[str, str],
+    preference_memory: dict[str, Any],
+) -> tuple[int, int, float, int, str]:
+    deepseek_order = {
+        key: index
+        for index, key in enumerate(explanations)
+    }
+    return (
+        -_preference_score(preference_memory, candidate.category),
+        deepseek_order.get(_candidate_explanation_key(candidate), 10_000),
+        -(candidate.place.rating or 0),
+        -(candidate.place.user_rating_count or 0),
+        candidate.place.label,
+    )
+
+
+def _select_route_recommendations(
+    candidates: list[RecommendationCandidate],
+    explanations: dict[str, str],
+    limit: int,
+    preference_memory: dict[str, Any] | None = None,
+) -> list[RoadTripRecommendation]:
+    preference_memory = preference_memory or {}
+    groups: dict[int, list[RecommendationCandidate]] = {}
+    for candidate in candidates:
+        if candidate.section != "route":
+            continue
+        groups.setdefault(candidate.route_index, []).append(candidate)
+
+    for route_index, group in groups.items():
+        groups[route_index] = sorted(
+            group,
+            key=lambda candidate: _candidate_rank_key(candidate, explanations, preference_memory),
+        )
+
+    selected: list[RoadTripRecommendation] = []
+    seen: set[str] = set()
+    ordered_indexes = sorted(groups)
+    while len(selected) < limit:
+        added_this_round = False
+        for route_index in ordered_indexes:
+            group = groups[route_index]
+            while group:
+                candidate = group.pop(0)
+                key = _candidate_key(candidate)
+                if key in seen:
+                    continue
+                seen.add(key)
+                explanation_key = _candidate_explanation_key(candidate)
+                explanation = explanations.get(explanation_key) or _fallback_explanation(candidate)
+                selected.append(_recommendation_from_candidate(candidate, explanation))
+                added_this_round = True
+                break
+            if len(selected) >= limit:
+                break
+        if not added_this_round:
+            break
+    return selected
+
+
 async def plan_road_trip(
     origin: str,
     destination: str,
@@ -458,6 +593,9 @@ async def plan_road_trip(
         ROUTE_SEARCHES,
         _sample_route_points(path),
         google_maps_server_key,
+        max_result_count=ROUTE_SEARCH_RESULT_COUNT,
+        result_radius_meters=ROUTE_RECOMMENDATION_MAX_DISTANCE_METERS,
+        route_path=path,
         preference_memory=preference_memory,
     )
     destination_candidates = await _search_candidates(
@@ -482,11 +620,10 @@ async def plan_road_trip(
 
     return RoadTripPlannerResponse(
         route=route,
-        routeRecommendations=_select_recommendations(
-            candidates,
+        routeRecommendations=_select_route_recommendations(
+            route_candidates,
             explanations,
-            "route",
-            5,
+            ROUTE_RECOMMENDATION_LIMIT,
             preference_memory,
         ),
         destinationRecommendations=_select_recommendations(

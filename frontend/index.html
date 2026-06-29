@@ -42,7 +42,7 @@
         <div class="map-tint" aria-hidden="true"></div>
         <div id="pin-hover-card" class="pin-hover-card hidden" aria-hidden="true"></div>
 
-        <form id="route-form" class="route-card" autocomplete="off">
+        <form id="route-form" class="route-card scrollbar-soft" autocomplete="off">
           <div id="simple-route-panel">
             <button id="simple-gps-close-button" class="simple-gps-close-button" type="button" aria-label="Close GPS">
               <i class="fa-solid fa-xmark" aria-hidden="true"></i>
@@ -176,12 +176,12 @@
           </div>
 
           <div id="battery-panel" class="hidden">
-            <section class="battery-box" aria-label="Battery Optimization">
+            <section class="battery-box" aria-label="Battery Analyzer">
               <header class="battery-heading">
                 <div>
                   <span class="battery-eyebrow">
                     <i class="fa-solid fa-bolt" aria-hidden="true"></i>
-                    Battery Optimization
+                    Battery Predictor
                   </span>
                   <strong>Plan the charge</strong>
                 </div>
@@ -378,7 +378,7 @@
 
         <aside
           id="charging-plan-modal"
-          class="charging-plan-modal hidden"
+          class="charging-plan-modal scrollbar-soft hidden"
           aria-hidden="true"
           aria-label="Charging Plan"
         >
@@ -397,8 +397,17 @@
           <div id="charging-plan-card" class="charging-plan-card"></div>
         </aside>
 
+        <button
+          id="charging-plan-collapsed-button"
+          class="charging-plan-collapsed-button hidden"
+          type="button"
+          aria-label="Open charging plan"
+        >
+          <i class="fa-solid fa-gas-pump" aria-hidden="true"></i>
+        </button>
+
         <div id="trip-choice-modal" class="trip-choice-modal hidden" aria-hidden="true">
-          <div class="trip-choice-dialog" role="dialog" aria-modal="true" aria-labelledby="trip-choice-title">
+          <div class="trip-choice-dialog scrollbar-soft" role="dialog" aria-modal="true" aria-labelledby="trip-choice-title">
             <div class="trip-choice-header">
               <h2 id="trip-choice-title">What would you like?</h2>
               <button id="trip-choice-close" class="trip-choice-close" type="button" aria-label="Close modal">

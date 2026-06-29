@@ -77,6 +77,7 @@ const elements = {
   roadTripResults: document.querySelector("#road-trip-results"),
   chargingPlanModal: document.querySelector("#charging-plan-modal"),
   chargingPlanCloseButton: document.querySelector("#charging-plan-close-button"),
+  chargingPlanCollapsedButton: document.querySelector("#charging-plan-collapsed-button"),
   chargingPlanModalTitle: document.querySelector("#charging-plan-modal-title"),
   chargingPlanCard: document.querySelector("#charging-plan-card"),
   routeRecommendations: document.querySelector("#route-recommendations"),

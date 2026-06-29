@@ -33,11 +33,11 @@ elements.roadTripButton.addEventListener("click", submitRoadTripPlan);
 ].forEach((container) => {
   container.addEventListener("click", handleRecommendationActionClick);
 });
-if (elements.chargingPlanModal) {
-  elements.chargingPlanModal.addEventListener("click", handleChargingPlanClick);
-}
 if (elements.chargingPlanCloseButton) {
   elements.chargingPlanCloseButton.addEventListener("click", closeChargingPlanModal);
+}
+if (elements.chargingPlanCollapsedButton) {
+  elements.chargingPlanCollapsedButton.addEventListener("click", openChargingPlanModal);
 }
 if (elements.roadTripCloseButton) {
   elements.roadTripCloseButton.addEventListener("click", closeRoadTripPanel);

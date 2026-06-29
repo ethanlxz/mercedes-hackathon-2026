@@ -85,6 +85,14 @@ def _title_for_severity(severity: Severity) -> str:
     return "Fatigue risk rising"
 
 
+def _active_stop_waypoints(active_route: ActiveRoadTrip) -> list[RouteWaypoint]:
+    return [
+        waypoint
+        for waypoint in active_route.route.waypoints
+        if waypoint.role == "stop" and waypoint.address
+    ]
+
+
 def _message_for_candidate(
     *,
     severity: Severity,
@@ -386,25 +394,39 @@ async def accept_rest_stop(
             detail="This road-trip route is no longer active. Plan the road trip again.",
         )
 
+    existing_stops = _active_stop_waypoints(active_route)
+    stops = [waypoint.address for waypoint in existing_stops]
+    is_new_stop = request.place.address not in stops
+    if is_new_stop:
+        stops.append(request.place.address)
+    stop_place_ids = ["" for _ in existing_stops]
+    if is_new_stop:
+        stop_place_ids.append(request.place.placeId)
+
     route = await compute_multi_stop_route(
         origin=active_route.origin,
-        stops=[request.place.address],
+        stops=stops,
         destination=active_route.destination,
         preferences=TripPreferences(),
         api_key=api_key,
         optimize_waypoints=False,
-        stop_place_ids=[request.place.placeId],
+        stop_place_ids=stop_place_ids,
     )
+    stop_waypoints = [*existing_stops]
+    if is_new_stop:
+        stop_waypoints.append(
+            RouteWaypoint(
+                role="stop",
+                label=request.place.name,
+                address=request.place.address,
+                rating=request.place.rating,
+                userRatingCount=request.place.userRatingCount,
+                googleMapsUri=request.place.googleMapsUri,
+            )
+        )
     route.waypoints = [
         RouteWaypoint(role="origin", label="Start", address=active_route.origin),
-        RouteWaypoint(
-            role="stop",
-            label=request.place.name,
-            address=request.place.address,
-            rating=request.place.rating,
-            userRatingCount=request.place.userRatingCount,
-            googleMapsUri=request.place.googleMapsUri,
-        ),
+        *stop_waypoints,
         RouteWaypoint(
             role="destination",
             label="Destination",

@@ -99,6 +99,14 @@
     border-radius: 16px;
   }
 
+  .charging-plan-collapsed-button {
+    top: 74px;
+    right: 14px;
+    width: 48px;
+    height: 48px;
+    border-radius: 14px;
+  }
+
   .charging-plan-modal-header strong {
     font-size: 16px;
   }
@@ -110,10 +118,6 @@
   .charging-station-actions {
     align-items: stretch;
     flex-direction: column;
-  }
-
-  .charging-add-button {
-    width: 100%;
   }
 
   .battery-heading {

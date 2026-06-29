@@ -107,6 +107,18 @@ async def test_road_trip_uses_fallback_explanation_when_deepseek_unavailable(mon
 
     monkeypatch.setattr(planner, "compute_route", fake_route)
     monkeypatch.setattr(planner, "search_places", fake_search_places)
+    monkeypatch.setattr(
+        planner,
+        "_decode_polyline",
+        lambda value: [
+            (4.6, 101.1),
+            (4.602, 101.098),
+            (4.604, 101.096),
+            (4.606, 101.094),
+            (4.608, 101.092),
+            (4.61, 101.09),
+        ],
+    )
 
     response = await planner.plan_road_trip(
         origin="Kuala Lumpur",
@@ -120,6 +132,59 @@ async def test_road_trip_uses_fallback_explanation_when_deepseek_unavailable(mon
     assert response.routeRecommendations
     assert response.routeRecommendations[0].address == "Google Formatted Kopitiam Address"
     assert "practical local food stop" in response.routeRecommendations[0].explanation.lower()
+
+
+@pytest.mark.asyncio
+async def test_road_trip_filters_route_places_far_from_route(monkeypatch):
+    async def fake_route(origin, destination, api_key):
+        return RouteResponse(
+            duration="3600s",
+            distanceMeters=120000,
+            encodedPolyline=ENCODED_POLYLINE,
+            summary=RouteSummary(durationText="1 hr", distanceText="120 km"),
+        )
+
+    async def fake_search_places(**kwargs):
+        query = kwargs["text_query"].split(" in ", 1)[0]
+        if query != "cafe":
+            return []
+        if kwargs["text_query"] != "cafe":
+            return []
+        return [
+            ResolvedPlace(
+                label="On Route Cafe",
+                address="Near the highway",
+                place_id="on-route-cafe",
+                latitude=4.62,
+                longitude=101.08,
+                rating=4.2,
+            ),
+            ResolvedPlace(
+                label="Far Away Cafe",
+                address="Too far from the route",
+                place_id="far-away-cafe",
+                latitude=4.62,
+                longitude=101.45,
+                rating=4.9,
+            ),
+        ]
+
+    monkeypatch.setattr(planner, "compute_route", fake_route)
+    monkeypatch.setattr(planner, "search_places", fake_search_places)
+    monkeypatch.setattr(planner, "_decode_polyline", lambda value: [(4.6, 101.1), (4.61, 101.09)])
+
+    response = await planner.plan_road_trip(
+        origin="Kuala Lumpur",
+        destination="Penang",
+        google_maps_server_key="google-key",
+        deepseek_api_key="",
+        deepseek_model="model",
+        deepseek_base_url="url",
+    )
+
+    route_names = {recommendation.name for recommendation in response.routeRecommendations}
+    assert "On Route Cafe" in route_names
+    assert "Far Away Cafe" not in route_names
 
 
 @pytest.mark.asyncio
@@ -163,6 +228,115 @@ async def test_road_trip_returns_more_destination_places(monkeypatch):
     )
 
     assert len(response.destinationRecommendations) == planner.DESTINATION_RECOMMENDATION_LIMIT
+
+
+@pytest.mark.asyncio
+async def test_road_trip_returns_more_route_places(monkeypatch):
+    async def fake_route(origin, destination, api_key):
+        return RouteResponse(
+            duration="3600s",
+            distanceMeters=120000,
+            encodedPolyline=ENCODED_POLYLINE,
+            summary=RouteSummary(durationText="1 hr", distanceText="120 km"),
+        )
+
+    async def fake_search_places(**kwargs):
+        query = kwargs["text_query"].split(" in ", 1)[0]
+        if query != "cafe":
+            return []
+        if kwargs["text_query"] != "cafe":
+            return []
+        route_index = len(search_calls)
+        search_calls.append(kwargs)
+        return [
+            ResolvedPlace(
+                label=f"Cafe Stop {route_index}-{index}",
+                address=f"Cafe Stop Address {route_index}-{index}",
+                place_id=f"cafe-stop-{route_index}-{index}",
+                latitude=4.6 + route_index / 1000,
+                longitude=101.1 - route_index / 1000,
+                rating=4.3,
+            )
+            for index in range(3)
+        ]
+
+    search_calls = []
+    monkeypatch.setattr(planner, "compute_route", fake_route)
+    monkeypatch.setattr(planner, "search_places", fake_search_places)
+    monkeypatch.setattr(
+        planner,
+        "_decode_polyline",
+        lambda value: [
+            (4.6, 101.1),
+            (4.602, 101.098),
+            (4.604, 101.096),
+            (4.606, 101.094),
+            (4.608, 101.092),
+            (4.61, 101.09),
+        ],
+    )
+
+    response = await planner.plan_road_trip(
+        origin="Kuala Lumpur",
+        destination="Penang",
+        google_maps_server_key="google-key",
+        deepseek_api_key="",
+        deepseek_model="model",
+        deepseek_base_url="url",
+    )
+
+    assert len(response.routeRecommendations) == planner.ROUTE_RECOMMENDATION_LIMIT
+    assert all(call["max_result_count"] == planner.ROUTE_SEARCH_RESULT_COUNT for call in search_calls)
+
+
+@pytest.mark.asyncio
+async def test_road_trip_spreads_route_places_across_route_samples(monkeypatch):
+    async def fake_route(origin, destination, api_key):
+        return RouteResponse(
+            duration="3600s",
+            distanceMeters=120000,
+            encodedPolyline=ENCODED_POLYLINE,
+            summary=RouteSummary(durationText="1 hr", distanceText="120 km"),
+        )
+
+    async def fake_search_places(**kwargs):
+        if " in " in kwargs["text_query"]:
+            return []
+        sample_index = len(route_search_calls) // len(planner.ROUTE_SEARCHES)
+        route_search_calls.append(kwargs)
+        latitude, longitude = kwargs["location_bias"]
+        rating = 5.0 if sample_index == 0 else 4.0
+        return [
+            ResolvedPlace(
+                label=f"Sample {sample_index} Stop {kwargs['text_query']} {index}",
+                address=f"Sample {sample_index} Address {index}",
+                place_id=f"sample-{sample_index}-{kwargs['text_query']}-{index}",
+                latitude=latitude,
+                longitude=longitude + (index * 0.0001),
+                rating=rating,
+                user_rating_count=100 - sample_index,
+            )
+            for index in range(3)
+        ]
+
+    route_search_calls = []
+    monkeypatch.setattr(planner, "compute_route", fake_route)
+    monkeypatch.setattr(planner, "search_places", fake_search_places)
+    monkeypatch.setattr(planner, "_decode_polyline", lambda value: [(0.0, 0.0), (0.0, 0.5), (0.0, 1.0)])
+
+    response = await planner.plan_road_trip(
+        origin="Origin",
+        destination="Destination",
+        google_maps_server_key="google-key",
+        deepseek_api_key="",
+        deepseek_model="model",
+        deepseek_base_url="url",
+    )
+
+    route_names = [recommendation.name for recommendation in response.routeRecommendations]
+    assert sum(name.startswith("Sample 0 ") for name in route_names) <= 2
+    assert any(name.startswith("Sample 2 ") for name in route_names)
+    assert any(name.startswith("Sample 4 ") for name in route_names)
 
 
 @pytest.mark.asyncio

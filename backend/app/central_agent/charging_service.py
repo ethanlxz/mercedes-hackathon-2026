@@ -34,6 +34,9 @@ CHARGER_QUERY = "DC fast EV charging station"
 CHARGER_RECOMMENDATION_LIMIT = 3
 
 
+SearchAnchor = tuple[str, tuple[float, float]]
+
+
 def _distance_meters(
     first: tuple[float, float],
     second: tuple[float, float],
@@ -125,21 +128,25 @@ def _trigger_distance_km(
     return round(min(trip_distance_km, usable_battery / usage_per_km), 1)
 
 
-def _search_target(
+def _search_anchors(
     *,
     decision: ChargingDecision,
     path: list[tuple[float, float]],
     trigger_distance_km: float | None,
-) -> tuple[float, float] | None:
+) -> list[SearchAnchor]:
     if not path:
-        return None
+        return []
+    anchors: list[SearchAnchor] = [("origin", path[0])]
     if decision == "charge_before_departure":
-        return path[0]
+        return anchors
     if decision == "charge_near_destination":
-        return path[-1]
+        anchors.append(("destination", path[-1]))
+        return anchors
     if decision == "charge_during_trip" and trigger_distance_km is not None:
-        return _point_at_distance(path, trigger_distance_km * 1000)
-    return None
+        trigger_point = _point_at_distance(path, trigger_distance_km * 1000)
+        if trigger_point is not None:
+            anchors.append(("trigger", trigger_point))
+    return anchors
 
 
 def _place_to_charger(place: ResolvedPlace) -> RestStopPlace:
@@ -176,11 +183,16 @@ def _distance_label(
 
 def _station_distance_label(
     *,
+    anchor_kind: str,
     decision: ChargingDecision,
     trigger_distance_km: float | None,
     distance_meters: int | None,
 ) -> str:
-    if decision == "charge_during_trip" and trigger_distance_km is not None:
+    if anchor_kind == "origin":
+        return "Near starting point"
+    if anchor_kind == "destination":
+        return "Near destination"
+    if anchor_kind == "trigger" and trigger_distance_km is not None:
         return f"Around {trigger_distance_km:.1f} km from start"
     return _distance_label(
         decision=decision,
@@ -189,49 +201,74 @@ def _station_distance_label(
     )
 
 
+def _place_key(place: ResolvedPlace) -> str:
+    if place.place_id:
+        return f"place:{place.place_id}"
+    return f"text:{place.label.strip().lower()}|{place.address.strip().lower()}"
+
+
+def _anchor_priority(anchor_kind: str, decision: ChargingDecision) -> int:
+    if decision in {"charge_during_trip", "charge_near_destination"}:
+        return 0 if anchor_kind != "origin" else 1
+    return 0
+
+
 async def _find_chargers(
     *,
-    search_point: tuple[float, float] | None,
+    search_anchors: list[SearchAnchor],
     decision: ChargingDecision,
     trigger_distance_km: float | None,
     api_key: str,
 ) -> list[ChargingStationOption]:
-    if not search_point:
+    if not search_anchors:
         return []
 
-    places = await search_places(
-        text_query=CHARGER_QUERY,
-        fallback_label="EV charging station",
-        api_key=api_key,
-        max_result_count=5,
-        included_type=google_place_type_for_category(CHARGER_QUERY),
-        strict_type_filtering=True,
-        location_bias=search_point,
-    )
-    candidates = [
-        place
-        for place in places
-        if place.latitude is not None and place.longitude is not None
-    ]
+    candidates: dict[str, tuple[ResolvedPlace, str, int, int]] = {}
+    for anchor_kind, search_point in search_anchors:
+        places = await search_places(
+            text_query=CHARGER_QUERY,
+            fallback_label="EV charging station",
+            api_key=api_key,
+            max_result_count=5,
+            included_type=google_place_type_for_category(CHARGER_QUERY),
+            strict_type_filtering=True,
+            location_bias=search_point,
+        )
+        for place in places:
+            if place.latitude is None or place.longitude is None:
+                continue
+            distance = int(
+                _distance_meters(
+                    search_point,
+                    (float(place.latitude), float(place.longitude)),
+                )
+            )
+            priority = _anchor_priority(anchor_kind, decision)
+            key = _place_key(place)
+            previous = candidates.get(key)
+            if previous is None or (priority, distance) < (previous[2], previous[3]):
+                candidates[key] = (place, anchor_kind, priority, distance)
+
     if not candidates:
         return []
 
     selected = sorted(
-        candidates,
-        key=lambda place: (
-            _distance_meters(search_point, (float(place.latitude), float(place.longitude))),
-            -(place.rating or 0),
-            -(place.user_rating_count or 0),
-            place.label,
+        candidates.values(),
+        key=lambda candidate: (
+            candidate[2],
+            candidate[3],
+            -(candidate[0].rating or 0),
+            -(candidate[0].user_rating_count or 0),
+            candidate[0].label,
         ),
     )[:CHARGER_RECOMMENDATION_LIMIT]
     stations: list[ChargingStationOption] = []
-    for place in selected:
-        distance = int(_distance_meters(search_point, (float(place.latitude), float(place.longitude))))
+    for place, anchor_kind, _, distance in selected:
         stations.append(
             ChargingStationOption(
                 place=_place_to_charger(place),
                 distanceLabel=_station_distance_label(
+                    anchor_kind=anchor_kind,
                     decision=decision,
                     trigger_distance_km=trigger_distance_km,
                     distance_meters=distance,
@@ -327,7 +364,7 @@ async def recommend_charging(
     if charging_required:
         try:
             stations = await _find_chargers(
-                search_point=_search_target(
+                search_anchors=_search_anchors(
                     decision=decision,
                     path=path,
                     trigger_distance_km=trigger_distance_km,

@@ -198,15 +198,6 @@ function chargingStationMarkup(recommendation) {
         const mapsLink = place.googleMapsUri
           ? `<a href="${escapeHtml(place.googleMapsUri)}" target="_blank" rel="noreferrer">Open in Maps</a>`
           : "";
-        const action = recommendation.chargingRequired
-          ? `
-            <button class="charging-add-button" type="button" data-charging-action="accept" data-charging-index="${index}">
-              <i class="fa-solid fa-plus" aria-hidden="true"></i>
-              Add stop
-            </button>
-          `
-          : "";
-
         return `
           <article class="charging-station-card">
             <div class="charging-station-icon" aria-hidden="true">
@@ -219,7 +210,6 @@ function chargingStationMarkup(recommendation) {
               <em>${escapeHtml(ratingText)}</em>
               <div class="charging-station-actions">
                 ${mapsLink}
-                ${action}
               </div>
             </div>
           </article>
@@ -237,6 +227,10 @@ function renderChargingPlan(recommendation, errorMessage = "") {
   state.roadTripChargingRecommendation = recommendation || null;
   elements.chargingPlanModal.classList.remove("hidden");
   elements.chargingPlanModal.setAttribute("aria-hidden", "false");
+  if (elements.chargingPlanCollapsedButton) {
+    elements.chargingPlanCollapsedButton.classList.add("hidden");
+    elements.chargingPlanCollapsedButton.setAttribute("aria-hidden", "true");
+  }
 
   if (!recommendation) {
     elements.chargingPlanModal.dataset.decision = "unavailable";
@@ -300,6 +294,26 @@ function closeChargingPlanModal() {
   }
   elements.chargingPlanModal.classList.add("hidden");
   elements.chargingPlanModal.setAttribute("aria-hidden", "true");
+  if (
+    elements.chargingPlanCollapsedButton
+    && elements.chargingPlanCard
+    && elements.chargingPlanCard.innerHTML.trim()
+  ) {
+    elements.chargingPlanCollapsedButton.classList.remove("hidden");
+    elements.chargingPlanCollapsedButton.setAttribute("aria-hidden", "false");
+  }
+}
+
+function openChargingPlanModal() {
+  if (!elements.chargingPlanModal) {
+    return;
+  }
+  elements.chargingPlanModal.classList.remove("hidden");
+  elements.chargingPlanModal.setAttribute("aria-hidden", "false");
+  if (elements.chargingPlanCollapsedButton) {
+    elements.chargingPlanCollapsedButton.classList.add("hidden");
+    elements.chargingPlanCollapsedButton.setAttribute("aria-hidden", "true");
+  }
 }
 
 function findRecommendation(id) {
@@ -573,46 +587,3 @@ function renderRoadTripResults(payload) {
     }
   });
 }
-
-async function acceptChargingStop(index) {
-  const recommendation = state.roadTripChargingRecommendation;
-  const station = chargingStations(recommendation)[index] || null;
-  const place = station?.place || null;
-  if (!place) {
-    setRoadTripStatus("No charging station is available to add yet.", true);
-    return;
-  }
-
-  const button = document.querySelector(`[data-charging-action='accept'][data-charging-index="${index}"]`);
-  if (button) {
-    button.disabled = true;
-    button.textContent = "Adding...";
-  }
-
-  try {
-    const route = await acceptChargingRecommendation(recommendation, place);
-    await renderRoute(route);
-    recommendation.added = true;
-    if (button) {
-      button.textContent = "Added to route";
-      button.disabled = true;
-    }
-    setRoadTripStatus("Charging stop added to your route.");
-  } catch (error) {
-    setRoadTripStatus(error.message || "Could not add that charging stop.", true);
-    if (button) {
-      button.disabled = false;
-      button.innerHTML = '<i class="fa-solid fa-plus" aria-hidden="true"></i> Add charger stop';
-    }
-  }
-}
-
-function handleChargingPlanClick(event) {
-  const button = event.target.closest("[data-charging-action='accept']");
-  if (!button) {
-    return;
-  }
-  event.preventDefault();
-  acceptChargingStop(Number(button.dataset.chargingIndex) || 0);
-}
-

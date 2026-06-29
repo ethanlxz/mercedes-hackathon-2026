@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Cockpit Command</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;700&family=IBM+Plex+Sans:wght@400;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root { --stage-bg: #02070c; --slide-bg: #07111a; --blue: #1685ff; --amber: #ffb020; --green: #24d07a; --text: #f4f8ff; }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+/* ===========================================
+   FIXED 16:9 STAGE: MANDATORY BASE STYLES
+   Include this ENTIRE file in every presentation.
+   Slides are authored at 1920Ã—1080 and scaled as a whole.
+   =========================================== */
+html, body { width: 100%; height: 100%; margin: 0; overflow: hidden; background: var(--stage-bg, #000); }
+.deck-viewport { position: fixed; inset: 0; overflow: hidden; background: var(--stage-bg, #000); }
+.deck-stage { position: absolute; left: 0; top: 0; width: 1920px; height: 1080px; overflow: hidden; transform-origin: 0 0; background: var(--slide-bg, #fff); }
+.slide { position: absolute; inset: 0; width: 1920px; height: 1080px; overflow: hidden; display: block; visibility: hidden; opacity: 0; pointer-events: none; background: var(--slide-bg, #fff); }
+.slide.active, .slide.visible { visibility: visible; opacity: 1; pointer-events: auto; z-index: 1; }
+img, video, canvas, svg { max-width: 100%; max-height: 100%; }
+.deck-controls { position: fixed; left: 50%; bottom: 22px; transform: translateX(-50%); z-index: 1000; }
+@media print { html, body { width: 1920px; height: auto; overflow: visible; background: #fff; } .deck-viewport { position: static; overflow: visible; background: #fff; } .deck-stage { position: static; width: auto; height: auto; transform: none !important; background: none; } .slide { position: relative; display: block !important; visibility: visible !important; opacity: 1 !important; pointer-events: auto !important; width: 1920px; height: 1080px; break-after: page; page-break-after: always; } .slide:last-child { break-after: auto; page-break-after: auto; } .deck-controls { display: none !important; } }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.2s !important; } }
+    .slide { font-family: "IBM Plex Sans", sans-serif; color: var(--text); background: radial-gradient(circle at 76% 38%, rgba(22,133,255,.28), transparent 25%), linear-gradient(145deg,#07111a,#0a2b31 58%,#03070d); }
+    .grid { position: absolute; inset: 0; background-image: linear-gradient(rgba(255,255,255,.045) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.045) 1px, transparent 1px); background-size: 80px 80px; opacity: .52; }
+    .route { position: absolute; right: 120px; top: 240px; width: 780px; height: 460px; filter: drop-shadow(0 20px 34px rgba(22,133,255,.25)); }
+    .copy { position: absolute; left: 96px; bottom: 120px; width: 940px; }
+    .kicker { color: var(--green); font: 700 30px "Rajdhani"; letter-spacing: 4px; text-transform: uppercase; }
+    h1 { margin-top: 28px; font: 700 120px/0.95 "Rajdhani"; letter-spacing: 0; }
+    p { margin-top: 28px; width: 760px; color: #b7c8d7; font-size: 32px; line-height: 1.35; }
+    .badge { position: absolute; right: 108px; bottom: 96px; padding: 20px 28px; border: 1px solid rgba(255,255,255,.14); border-radius: 18px; background: rgba(0,0,0,.38); font: 700 28px "Rajdhani"; }
+  </style>
+</head>
+<body>
+  <div class="deck-viewport"><main id="deckStage" class="deck-stage">
+    <section class="slide active visible">
+      <div class="grid"></div>
+      <svg class="route" viewBox="0 0 780 460" aria-hidden="true">
+        <path d="M54 344 C172 244 240 372 356 244 C476 112 590 156 724 52" fill="none" stroke="#1685ff" stroke-width="40" stroke-linecap="round"/>
+        <path d="M54 344 C172 244 240 372 356 244 C476 112 590 156 724 52" fill="none" stroke="#79bdff" stroke-width="12" stroke-linecap="round"/>
+        <circle cx="54" cy="344" r="26" fill="#24d07a" stroke="#fff" stroke-width="6"/><circle cx="724" cy="52" r="26" fill="#1685ff" stroke="#fff" stroke-width="6"/>
+      </svg>
+      <div class="copy"><div class="kicker">Central AI Agent</div><h1>Mercedes EV Intelligent Driving Assistant</h1><p>Safer, smarter, more personal EV journeys through one coordinated driving brain.</p></div>
+      <div class="badge">4-minute demo pitch</div>
+    </section>
+  </main></div>
+  <script>const s=document.getElementById("deckStage");function scale(){const f=Math.min(innerWidth/1920,innerHeight/1080);s.style.transform=`translate(${(innerWidth-1920*f)/2}px,${(innerHeight-1080*f)/2}px) scale(${f})`;}addEventListener("resize",scale);scale();</script>
+</body>
+</html>

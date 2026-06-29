@@ -93,14 +93,15 @@ graph LR
 | **Opportunity Bundling** | Identifies when a fatigue rest stop overlaps with a charging need, reducing total stops and journey time |
 | **Human-in-the-Loop** | Never acts autonomously — presents actionable notifications with one-tap acceptance, keeping the driver in control |
 
-### Why a Centralized Agent Beats Microservices
+### Why a Centralized Agent
 
 | Principle | Benefit |
 |---|---|
-| **Shared State** | The active route is loaded once, then reused by fatigue, charging, and preference modules — no duplicated API calls |
-| **Cross-Domain Logic** | A fatigue-triggered rest stop can also serve as a charging stop; the agent sees both needs simultaneously |
-| **Consistent UX** | All notifications (rest stops, charging, preference feedback) follow the same schema, same modal, same action pattern |
-| **Extensibility** | New modules (weather alerts, traffic re-routing, maintenance reminders) register into the same graph without refactoring |
+| **Single Decision Point** | All inputs — fatigue scores, battery levels, route geometry, user preferences — converge into one reasoning step. The agent weighs every factor simultaneously and produces one recommendation. No conflicting outputs from competing services. |
+| **Atomic State** | The agent owns the entire journey state. When fatigue triggers a rest-stop search, the result is immediately available to the charging module in the same execution context. No eventual consistency, no stale caches, no missed bundles. |
+| **Lower Latency** | One agent invocation replaces a chain of microservice calls. Route data is loaded once, not fetched independently by fatigue, charging, and preferences services. Fewer network hops, faster response to the driver. |
+| **Simpler Reasoning** | A single state machine is easier to debug, test, and reason about than a distributed web of services that must be orchestrated externally. |
+| **Extensibility** | New capabilities — weather alerts, traffic re-routing, maintenance reminders — register into the same agent graph without refactoring existing modules. The agent grows without adding architectural complexity. |
 
 ---
 
