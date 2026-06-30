@@ -77,7 +77,7 @@ graph LR
     B --> D
     C --> D
     D --> E[⚡ Context-Aware Actions]
-    E --> F[Rest Stop + Charge Combo]
+    E --> F[Fatigue Rest Stop + Charge Combo]
     E --> G[Route Adaptation]
     E --> H[Preference Learning]
 ```
