@@ -1,0 +1,1904 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Mercedes EV Intelligent Driving Assistant - Hackathon Pitch</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=Manrope:wght@500;700;800&display=swap" rel="stylesheet">
+  <style>
+    /* ===========================================
+       THEME VARIABLES
+       Change these values to adjust the deck style.
+       =========================================== */
+    :root {
+      --stage-bg: #dfe7f0;
+      --slide-bg: #f6f9fc;
+      --paper: #ffffff;
+      --ink: #111827;
+      --muted: #5b6778;
+      --soft: #d9e4f0;
+      --line: rgba(29, 55, 85, 0.16);
+      --blue: #1769e8;
+      --blue-2: #5aa8ff;
+      --green: #24b46b;
+      --amber: #f5a524;
+      --dark: #0e1724;
+      --shadow: 0 28px 80px rgba(22, 52, 91, 0.14);
+      --font-display: "Manrope", sans-serif;
+      --font-body: "IBM Plex Sans", sans-serif;
+      --ease: cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    /* ===========================================
+       BASE RESET
+       Keeps all slide measurements predictable.
+       =========================================== */
+    * {
+      box-sizing: border-box;
+    }
+
+    html,
+    body {
+      font-family: var(--font-body);
+      color: var(--ink);
+    }
+
+    /* ===========================================
+       FIXED 16:9 STAGE: MANDATORY BASE STYLES
+       Include this ENTIRE file in every presentation.
+       Slides are authored at 1920x1080 and scaled as a whole.
+       =========================================== */
+
+    /* 1. Lock the browser viewport */
+    html,
+    body {
+        width: 100%;
+        height: 100%;
+        margin: 0;
+        overflow: hidden;
+        background: var(--stage-bg, #000);
+    }
+
+    /* 2. Full-window deck viewport */
+    .deck-viewport {
+        position: fixed;
+        inset: 0;
+        overflow: hidden;
+        background: var(--stage-bg, #000);
+    }
+
+    /* 3. Fixed 16:9 design canvas.
+       JavaScript sets transform: translate(...) scale(...). */
+    .deck-stage {
+        position: absolute;
+        left: 0;
+        top: 0;
+        width: 1920px;
+        height: 1080px;
+        overflow: hidden;
+        transform-origin: 0 0;
+        background: var(--slide-bg, #fff);
+    }
+
+    /* 4. Slides stack inside the fixed stage.
+       Content must be laid out at 1920x1080, not reflowed per device. */
+    .slide {
+        position: absolute;
+        inset: 0;
+        width: 1920px;
+        height: 1080px;
+        overflow: hidden;
+        display: block;
+        visibility: hidden;
+        opacity: 0;
+        pointer-events: none;
+        background: var(--slide-bg, #fff);
+    }
+
+    .slide.active,
+    .slide.visible {
+        visibility: visible;
+        opacity: 1;
+        pointer-events: auto;
+        z-index: 1;
+    }
+
+    /* 5. Keep media inside authored slide bounds */
+    img,
+    video,
+    canvas,
+    svg {
+        max-width: 100%;
+        max-height: 100%;
+    }
+
+    /* 6. Presentation chrome stays outside the slide design system */
+    .deck-controls {
+        position: fixed;
+        left: 50%;
+        bottom: 22px;
+        transform: translateX(-50%);
+        z-index: 1000;
+    }
+
+    /* 7. Print one fixed-size slide per page */
+    @media print {
+        html,
+        body {
+            width: 1920px;
+            height: auto;
+            overflow: visible;
+            background: #fff;
+        }
+
+        .deck-viewport {
+            position: static;
+            overflow: visible;
+            background: #fff;
+        }
+
+        .deck-stage {
+            position: static;
+            width: auto;
+            height: auto;
+            transform: none !important;
+            background: none;
+        }
+
+        .slide {
+            position: relative;
+            display: block !important;
+            visibility: visible !important;
+            opacity: 1 !important;
+            pointer-events: auto !important;
+            width: 1920px;
+            height: 1080px;
+            break-after: page;
+            page-break-after: always;
+        }
+
+        .slide:last-child {
+            break-after: auto;
+            page-break-after: auto;
+        }
+
+        .deck-controls {
+            display: none !important;
+        }
+    }
+
+    /* 8. Reduced motion */
+    @media (prefers-reduced-motion: reduce) {
+        *,
+        *::before,
+        *::after {
+            animation-duration: 0.01ms !important;
+            transition-duration: 0.2s !important;
+        }
+    }
+
+    /* ===========================================
+       SHARED SLIDE FOUNDATION
+       Provides the light technical grid and deck chrome.
+       =========================================== */
+    .slide {
+      padding: 74px 86px;
+      background:
+        radial-gradient(circle at 82% 12%, rgba(23, 105, 232, 0.16), transparent 30%),
+        radial-gradient(circle at 18% 88%, rgba(36, 180, 107, 0.10), transparent 28%),
+        linear-gradient(135deg, #f8fbff 0%, #eef4fa 100%);
+    }
+
+    .slide::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      background-image:
+        linear-gradient(rgba(17, 24, 39, 0.035) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(17, 24, 39, 0.035) 1px, transparent 1px);
+      background-size: 64px 64px;
+      mask-image: linear-gradient(90deg, rgba(0, 0, 0, 0.65), rgba(0, 0, 0, 0.06));
+    }
+
+    .slide::after {
+      content: "";
+      position: absolute;
+      inset: 36px;
+      border: 1px solid rgba(17, 24, 39, 0.08);
+      border-radius: 30px;
+      pointer-events: none;
+    }
+
+    .deck-mark,
+    .slide-number {
+      position: absolute;
+      top: 48px;
+      z-index: 4;
+      color: rgba(17, 24, 39, 0.58);
+      font: 700 18px/1 var(--font-display);
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    .deck-mark {
+      left: 86px;
+    }
+
+    .slide-number {
+      right: 86px;
+    }
+
+    .eyebrow {
+      display: inline-flex;
+      align-items: center;
+      gap: 12px;
+      color: var(--blue);
+      font: 800 20px/1 var(--font-display);
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    .eyebrow::before {
+      content: "";
+      width: 38px;
+      height: 4px;
+      border-radius: 4px;
+      background: linear-gradient(90deg, var(--blue), var(--blue-2));
+    }
+
+    h1,
+    h2,
+    h3,
+    p {
+      margin: 0;
+    }
+
+    h1,
+    h2,
+    h3 {
+      font-family: var(--font-display);
+      letter-spacing: 0;
+    }
+
+    .big-title {
+      margin-top: 24px;
+      max-width: 1180px;
+      font: 800 106px/0.98 var(--font-display);
+      color: var(--ink);
+    }
+
+    .slide-title {
+      margin-top: 20px;
+      font: 800 74px/0.98 var(--font-display);
+      color: var(--ink);
+    }
+
+    .slide-subtitle {
+      margin-top: 22px;
+      max-width: 980px;
+      color: var(--muted);
+      font: 500 30px/1.38 var(--font-body);
+    }
+
+    .blue {
+      color: var(--blue);
+    }
+
+    /* ===========================================
+       MOTION SYSTEM
+       Subtle reveal animations for a polished pitch rhythm.
+       =========================================== */
+    .reveal,
+    .reveal-left,
+    .reveal-scale,
+    .reveal-blur {
+      opacity: 0;
+      transition:
+        opacity 680ms var(--ease),
+        transform 680ms var(--ease),
+        filter 680ms var(--ease);
+    }
+
+    .reveal {
+      transform: translateY(28px);
+    }
+
+    .reveal-left {
+      transform: translateX(-42px);
+    }
+
+    .reveal-scale {
+      transform: scale(0.94);
+    }
+
+    .reveal-blur {
+      filter: blur(12px);
+      transform: translateY(18px);
+    }
+
+    .slide.visible .reveal,
+    .slide.visible .reveal-left,
+    .slide.visible .reveal-scale,
+    .slide.visible .reveal-blur {
+      opacity: 1;
+      transform: translate(0, 0) scale(1);
+      filter: blur(0);
+    }
+
+    .delay-1 { transition-delay: 90ms; }
+    .delay-2 { transition-delay: 180ms; }
+    .delay-3 { transition-delay: 270ms; }
+    .delay-4 { transition-delay: 360ms; }
+    .delay-5 { transition-delay: 450ms; }
+
+    /* ===========================================
+       REUSABLE COMPONENTS
+       Cards, chips, metrics, and route visuals shared by slides.
+       =========================================== */
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 12px;
+      height: 50px;
+      padding: 0 22px;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.82);
+      border: 1px solid rgba(23, 105, 232, 0.18);
+      color: var(--blue);
+      font: 800 18px/1 var(--font-display);
+      box-shadow: 0 14px 36px rgba(23, 105, 232, 0.10);
+    }
+
+    .card {
+      position: relative;
+      z-index: 2;
+      background: rgba(255, 255, 255, 0.90);
+      border: 1px solid rgba(17, 24, 39, 0.10);
+      border-radius: 24px;
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(14px);
+    }
+
+    .small-label {
+      color: var(--blue);
+      font: 800 18px/1 var(--font-display);
+      letter-spacing: 0.07em;
+      text-transform: uppercase;
+    }
+
+    .body-copy {
+      color: var(--muted);
+      font: 500 27px/1.38 var(--font-body);
+    }
+
+    .route-line {
+      position: absolute;
+      pointer-events: none;
+      overflow: visible;
+    }
+
+    .route-line .base {
+      fill: none;
+      stroke: rgba(23, 105, 232, 0.16);
+      stroke-width: 18;
+      stroke-linecap: round;
+    }
+
+    .route-line .active-route {
+      fill: none;
+      stroke: url(#routeGradient);
+      stroke-width: 10;
+      stroke-linecap: round;
+      stroke-dasharray: 36 22;
+      animation: routeFlow 2.2s linear infinite;
+      filter: drop-shadow(0 8px 18px rgba(23, 105, 232, 0.34));
+    }
+
+    @keyframes routeFlow {
+      to { stroke-dashoffset: -116; }
+    }
+
+    /* ===========================================
+       SLIDE 1: TEAM COVER
+       Matches the original PDF opening with a clean logo-first cover.
+       =========================================== */
+    .team-cover-slide {
+      background:
+        radial-gradient(circle at 74% 20%, rgba(90, 168, 255, 0.24), transparent 25%),
+        radial-gradient(circle at 24% 76%, rgba(245, 165, 36, 0.14), transparent 26%),
+        linear-gradient(135deg, #eef4fa 0%, #dfe8f1 100%);
+    }
+
+    .team-cover-slide::before {
+      background-image:
+        linear-gradient(30deg, rgba(17, 24, 39, 0.035) 12%, transparent 12.5%, transparent 87%, rgba(17, 24, 39, 0.035) 87.5%, rgba(17, 24, 39, 0.035)),
+        linear-gradient(150deg, rgba(17, 24, 39, 0.035) 12%, transparent 12.5%, transparent 87%, rgba(17, 24, 39, 0.035) 87.5%, rgba(17, 24, 39, 0.035));
+      background-size: 96px 168px;
+      opacity: 0.34;
+      mask-image: linear-gradient(90deg, rgba(0, 0, 0, 0.38), rgba(0, 0, 0, 0.06));
+    }
+
+    .team-cover {
+      position: relative;
+      z-index: 2;
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      padding-bottom: 6px;
+    }
+
+    .team-logo {
+      width: 292px;
+      height: 382px;
+      object-fit: contain;
+      display: block;
+      margin-bottom: 20px;
+      filter: drop-shadow(0 24px 34px rgba(71, 85, 105, 0.22));
+    }
+
+    .team-name {
+      color: #3f4650;
+      font: 800 118px/0.92 var(--font-display);
+      letter-spacing: -0.02em;
+    }
+
+    .team-subtitle {
+      margin-top: 24px;
+      color: rgba(63, 70, 80, 0.62);
+      font: 700 24px/1 var(--font-display);
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    .title-layout {
+      position: relative;
+      z-index: 2;
+      display: grid;
+      grid-template-columns: 1.08fr 0.92fr;
+      gap: 72px;
+      height: 100%;
+      align-items: center;
+      padding-top: 16px;
+    }
+
+    .title-copy {
+      padding-left: 18px;
+    }
+
+    .title-copy .big-title {
+      max-width: 1040px;
+      font-size: 98px;
+    }
+
+    .hook-line {
+      margin-top: 28px;
+      max-width: 880px;
+      color: #334155;
+      font: 600 36px/1.28 var(--font-body);
+    }
+
+    .title-meta {
+      display: flex;
+      gap: 18px;
+      margin-top: 54px;
+    }
+
+    .cockpit-hero {
+      position: relative;
+      width: 710px;
+      height: 640px;
+      justify-self: center;
+    }
+
+    .cockpit-screen {
+      position: absolute;
+      inset: 54px 0 0;
+      border-radius: 34px;
+      background:
+        linear-gradient(145deg, rgba(255, 255, 255, 0.92), rgba(230, 238, 248, 0.92)),
+        #fff;
+      border: 1px solid rgba(23, 105, 232, 0.16);
+      box-shadow: 0 38px 110px rgba(18, 52, 93, 0.22);
+      overflow: hidden;
+    }
+
+    .cockpit-topbar {
+      height: 82px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 34px;
+      background: rgba(255, 255, 255, 0.72);
+      border-bottom: 1px solid rgba(17, 24, 39, 0.08);
+      color: #172033;
+      font: 800 20px/1 var(--font-display);
+    }
+
+    .status-dot {
+      display: inline-block;
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      background: var(--green);
+      box-shadow: 0 0 0 8px rgba(36, 180, 107, 0.12);
+    }
+
+    .cockpit-map {
+      position: absolute;
+      inset: 82px 0 0;
+      background:
+        radial-gradient(circle at 36% 44%, rgba(23, 105, 232, 0.12), transparent 24%),
+        linear-gradient(135deg, #edf5fd, #f8fbff);
+    }
+
+    .hero-node {
+      position: absolute;
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      background: var(--blue);
+      border: 5px solid #fff;
+      box-shadow: 0 10px 24px rgba(23, 105, 232, 0.28);
+    }
+
+    .node-a { left: 92px; top: 248px; }
+    .node-b { right: 120px; top: 158px; background: var(--green); }
+    .node-c { right: 190px; bottom: 132px; background: var(--amber); }
+
+    .hero-card {
+      position: absolute;
+      right: 42px;
+      bottom: 42px;
+      width: 292px;
+      padding: 24px;
+      border-radius: 22px;
+      background: rgba(14, 23, 36, 0.93);
+      color: #fff;
+      box-shadow: 0 24px 60px rgba(14, 23, 36, 0.28);
+    }
+
+    .hero-card strong {
+      display: block;
+      font: 800 31px/1 var(--font-display);
+    }
+
+    .hero-card span {
+      display: block;
+      margin-top: 10px;
+      color: rgba(255, 255, 255, 0.70);
+      font: 500 18px/1.35 var(--font-body);
+    }
+
+    /* ===========================================
+       SLIDE 2: TEAMWORK ANALOGY
+       Uses the supplied image to explain connected intelligence.
+       =========================================== */
+    .analogy-layout {
+      position: relative;
+      z-index: 2;
+      display: grid;
+      grid-template-columns: 0.9fr 1.1fr;
+      gap: 62px;
+      height: 100%;
+      align-items: center;
+    }
+
+    .photo-frame {
+      height: 660px;
+      border-radius: 30px;
+      overflow: hidden;
+      box-shadow: 0 36px 92px rgba(17, 24, 39, 0.22);
+      border: 1px solid rgba(17, 24, 39, 0.10);
+    }
+
+    .photo-frame img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      object-position: center;
+      display: block;
+    }
+
+    .analogy-copy {
+      padding-right: 42px;
+    }
+
+    .analogy-copy h2 {
+      margin-top: 22px;
+      font: 800 78px/1 var(--font-display);
+      color: var(--ink);
+    }
+
+    .analogy-copy p {
+      margin-top: 26px;
+      color: var(--muted);
+      font: 500 32px/1.38 var(--font-body);
+    }
+
+    .team-equation {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 18px;
+      margin-top: 46px;
+    }
+
+    .team-equation .card {
+      min-height: 148px;
+      padding: 24px;
+    }
+
+    .team-equation strong {
+      display: block;
+      color: var(--blue);
+      font: 800 25px/1.05 var(--font-display);
+    }
+
+    .team-equation span {
+      display: block;
+      margin-top: 12px;
+      color: var(--muted);
+      font: 500 20px/1.35 var(--font-body);
+    }
+
+    /* ===========================================
+       SLIDE 3: PROBLEM STATEMENT
+       Three cards map the exact user-provided problem statements.
+       =========================================== */
+    .problem-grid {
+      position: relative;
+      z-index: 2;
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 28px;
+      margin-top: 72px;
+    }
+
+    .problem-card {
+      min-height: 480px;
+      padding: 34px;
+    }
+
+    .problem-index {
+      width: 58px;
+      height: 58px;
+      border-radius: 18px;
+      display: grid;
+      place-items: center;
+      color: #fff;
+      background: var(--blue);
+      font: 800 24px/1 var(--font-display);
+      box-shadow: 0 18px 34px rgba(23, 105, 232, 0.22);
+    }
+
+    .problem-card h3 {
+      margin-top: 32px;
+      color: var(--ink);
+      font: 800 40px/1.04 var(--font-display);
+    }
+
+    .problem-card p {
+      margin-top: 22px;
+      color: var(--muted);
+      font: 500 25px/1.38 var(--font-body);
+    }
+
+    .problem-strip {
+      position: absolute;
+      left: 86px;
+      right: 86px;
+      bottom: 78px;
+      z-index: 2;
+      height: 78px;
+      border-radius: 20px;
+      background: rgba(17, 24, 39, 0.92);
+      color: #fff;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font: 700 27px/1 var(--font-display);
+      box-shadow: 0 24px 60px rgba(17, 24, 39, 0.18);
+    }
+
+    /* ===========================================
+       SLIDE 4: SOLUTION
+       Positions MEME as the central decision layer.
+       =========================================== */
+    .solution-layout {
+      position: relative;
+      z-index: 2;
+      display: grid;
+      grid-template-columns: 0.92fr 1.08fr;
+      gap: 72px;
+      height: 100%;
+      align-items: center;
+    }
+
+    .solution-hub {
+      height: 650px;
+      display: grid;
+      place-items: center;
+    }
+
+    .hub-ring {
+      position: relative;
+      width: 560px;
+      height: 560px;
+      border-radius: 50%;
+      background:
+        radial-gradient(circle at 50% 50%, rgba(23, 105, 232, 0.15), transparent 58%),
+        #fff;
+      border: 1px solid rgba(23, 105, 232, 0.18);
+      box-shadow: 0 40px 110px rgba(23, 105, 232, 0.16);
+    }
+
+    .hub-ring::before,
+    .hub-ring::after {
+      content: "";
+      position: absolute;
+      inset: 58px;
+      border: 2px dashed rgba(23, 105, 232, 0.28);
+      border-radius: 50%;
+      animation: spin 18s linear infinite;
+    }
+
+    .hub-ring::after {
+      inset: 120px;
+      border-color: rgba(36, 180, 107, 0.26);
+      animation-duration: 24s;
+      animation-direction: reverse;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    .hub-core {
+      position: absolute;
+      inset: 158px;
+      border-radius: 34px;
+      display: grid;
+      place-items: center;
+      text-align: center;
+      background: var(--dark);
+      color: #fff;
+      box-shadow: 0 28px 80px rgba(17, 24, 39, 0.24);
+    }
+
+    .hub-core strong {
+      font: 800 74px/0.9 var(--font-display);
+    }
+
+    .hub-core span {
+      margin-top: 8px;
+      max-width: 210px;
+      color: rgba(255, 255, 255, 0.68);
+      font: 600 18px/1.25 var(--font-body);
+    }
+
+    .orbit-chip {
+      position: absolute;
+      height: 62px;
+      padding: 0 22px;
+      display: inline-flex;
+      align-items: center;
+      border-radius: 18px;
+      background: #fff;
+      border: 1px solid rgba(17, 24, 39, 0.10);
+      color: var(--ink);
+      font: 800 20px/1 var(--font-display);
+      box-shadow: 0 18px 44px rgba(17, 24, 39, 0.12);
+    }
+
+    .orbit-a { left: -14px; top: 116px; }
+    .orbit-b { right: -22px; top: 172px; }
+    .orbit-c { left: 128px; bottom: -8px; }
+    .orbit-d { right: 72px; bottom: 62px; }
+
+    .solution-points {
+      display: grid;
+      gap: 20px;
+      margin-top: 40px;
+    }
+
+    .solution-point {
+      display: grid;
+      grid-template-columns: 72px 1fr;
+      gap: 22px;
+      min-height: 112px;
+      padding: 24px;
+      align-items: center;
+    }
+
+    .solution-point .iconbox {
+      width: 72px;
+      height: 72px;
+      border-radius: 20px;
+      display: grid;
+      place-items: center;
+      background: rgba(23, 105, 232, 0.10);
+      color: var(--blue);
+    }
+
+    .solution-point strong {
+      display: block;
+      font: 800 27px/1 var(--font-display);
+      color: var(--ink);
+    }
+
+    .solution-point span {
+      display: block;
+      margin-top: 8px;
+      color: var(--muted);
+      font: 500 22px/1.32 var(--font-body);
+    }
+
+    /* ===========================================
+       SLIDE 5: ANIMATED SYSTEM FLOW
+       Clean replacement for the PDF system-flow slide.
+       =========================================== */
+    .flow-title {
+      position: absolute;
+      left: 86px;
+      top: 112px;
+      z-index: 3;
+      max-width: 760px;
+    }
+
+    .flow-title h2 {
+      margin-top: 16px;
+      font: 800 62px/1 var(--font-display);
+      color: var(--ink);
+    }
+
+    .flow-title p {
+      margin-top: 14px;
+      color: var(--muted);
+      font: 500 25px/1.35 var(--font-body);
+    }
+
+    .flow-canvas {
+      position: absolute;
+      left: 86px;
+      right: 86px;
+      top: 218px;
+      bottom: 76px;
+      z-index: 2;
+    }
+
+    .flow-lines {
+      position: absolute;
+      inset: 0;
+      overflow: visible;
+    }
+
+    .data-link {
+      fill: none;
+      stroke: rgba(17, 24, 39, 0.18);
+      stroke-width: 9;
+      stroke-linecap: round;
+      stroke-dasharray: 16 18;
+    }
+
+    .data-flow {
+      fill: none;
+      stroke: var(--blue);
+      stroke-width: 8;
+      stroke-linecap: round;
+      stroke-dasharray: 4 34;
+      animation: dataDash 1.35s linear infinite;
+      filter: drop-shadow(0 0 12px rgba(23, 105, 232, 0.48));
+    }
+
+    .flow-green {
+      stroke: var(--green);
+      animation-delay: -0.35s;
+      filter: drop-shadow(0 0 12px rgba(36, 180, 107, 0.45));
+    }
+
+    .flow-amber {
+      stroke: var(--amber);
+      animation-delay: -0.7s;
+      filter: drop-shadow(0 0 12px rgba(245, 165, 36, 0.52));
+    }
+
+    @keyframes dataDash {
+      to { stroke-dashoffset: -76; }
+    }
+
+    .flow-module {
+      position: absolute;
+      background: rgba(255, 255, 255, 0.94);
+      border: 1px solid rgba(17, 24, 39, 0.10);
+      border-radius: 24px;
+      box-shadow: 0 28px 70px rgba(17, 24, 39, 0.14);
+      overflow: hidden;
+    }
+
+    .flow-module header {
+      height: 68px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 20px;
+      border-bottom: 1px solid rgba(17, 24, 39, 0.08);
+      background: rgba(246, 249, 252, 0.90);
+    }
+
+    .flow-module-title {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      color: var(--ink);
+      font: 800 23px/1 var(--font-display);
+    }
+
+    .flow-module-title svg {
+      width: 30px;
+      height: 30px;
+      color: var(--blue);
+      flex: 0 0 auto;
+    }
+
+    .flow-module-tag {
+      color: var(--muted);
+      font: 800 15px/1 var(--font-display);
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+    }
+
+    .flow-module img {
+      display: block;
+      width: 100%;
+      height: calc(100% - 68px);
+      object-fit: cover;
+      object-position: top left;
+    }
+
+    .flow-road {
+      left: 0;
+      top: 132px;
+      width: 610px;
+      height: 292px;
+    }
+
+    .flow-battery {
+      left: 0;
+      bottom: 0;
+      width: 610px;
+      height: 286px;
+    }
+
+    .flow-fatigue {
+      right: 0;
+      top: 238px;
+      width: 480px;
+      height: 470px;
+    }
+
+    .flow-hub {
+      position: absolute;
+      left: 744px;
+      top: 238px;
+      width: 360px;
+      min-height: 392px;
+      padding: 34px 32px;
+      text-align: center;
+      border-radius: 32px;
+      background: #fff;
+      border: 1px solid rgba(23, 105, 232, 0.20);
+      box-shadow: 0 34px 90px rgba(23, 105, 232, 0.18);
+    }
+
+    .chip-icon {
+      position: relative;
+      width: 130px;
+      height: 106px;
+      margin: 0 auto 22px;
+      border: 9px solid var(--dark);
+      border-radius: 20px;
+      color: var(--dark);
+    }
+
+    .chip-icon::before,
+    .chip-icon::after {
+      content: "";
+      position: absolute;
+      top: 50%;
+      width: 18px;
+      height: 52px;
+      border: 8px solid var(--dark);
+      border-radius: 12px;
+      transform: translateY(-50%);
+      background: #fff;
+    }
+
+    .chip-icon::before { left: -28px; }
+    .chip-icon::after { right: -28px; }
+
+    .chip-eye {
+      position: absolute;
+      top: 30px;
+      width: 34px;
+      height: 34px;
+      border: 8px solid var(--dark);
+      border-radius: 50%;
+    }
+
+    .chip-eye.left { left: 22px; }
+    .chip-eye.right { right: 22px; }
+
+    .chip-mouth {
+      position: absolute;
+      left: 40px;
+      right: 40px;
+      bottom: 28px;
+      height: 8px;
+      border-radius: 10px;
+      background: var(--blue);
+    }
+
+    .flow-hub h3 {
+      color: var(--ink);
+      font: 800 68px/0.9 var(--font-display);
+    }
+
+    .flow-hub p {
+      margin-top: 12px;
+      color: var(--muted);
+      font: 600 22px/1.22 var(--font-body);
+    }
+
+    .hub-pills {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+      margin-top: 24px;
+    }
+
+    .hub-pills span {
+      padding: 11px 8px;
+      border-radius: 12px;
+      background: rgba(23, 105, 232, 0.09);
+      color: var(--blue);
+      font: 800 16px/1 var(--font-display);
+    }
+
+    /* ===========================================
+       SLIDE 6: AI VS NO AI
+       Clear scenario comparison for hackathon judges.
+       =========================================== */
+    .comparison-layout {
+      position: relative;
+      z-index: 2;
+      margin-top: 52px;
+      display: grid;
+      grid-template-columns: 0.9fr 1.1fr;
+      gap: 32px;
+    }
+
+    .scenario-list {
+      display: grid;
+      gap: 18px;
+    }
+
+    .scenario-card {
+      padding: 26px;
+      min-height: 128px;
+    }
+
+    .scenario-card strong {
+      display: block;
+      color: var(--ink);
+      font: 800 28px/1.05 var(--font-display);
+    }
+
+    .scenario-card span {
+      display: block;
+      margin-top: 10px;
+      color: var(--muted);
+      font: 500 21px/1.32 var(--font-body);
+    }
+
+    .versus-table {
+      padding: 26px;
+    }
+
+    .versus-head,
+    .versus-row {
+      display: grid;
+      grid-template-columns: 0.9fr 1fr;
+      gap: 18px;
+    }
+
+    .versus-head {
+      margin-bottom: 18px;
+    }
+
+    .versus-head div {
+      padding: 18px 20px;
+      border-radius: 16px;
+      font: 800 22px/1 var(--font-display);
+    }
+
+    .without-head {
+      background: rgba(17, 24, 39, 0.08);
+      color: #334155;
+    }
+
+    .with-head {
+      background: rgba(23, 105, 232, 0.12);
+      color: var(--blue);
+    }
+
+    .versus-row {
+      padding: 15px 0;
+      border-top: 1px solid rgba(17, 24, 39, 0.08);
+    }
+
+    .versus-row p {
+      color: var(--muted);
+      font: 500 20px/1.34 var(--font-body);
+    }
+
+    .versus-row p:last-child {
+      color: #1e3a5f;
+      font-weight: 700;
+    }
+
+    .impact-row {
+      position: relative;
+      z-index: 2;
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 22px;
+      margin-top: 26px;
+    }
+
+    .impact-mini {
+      min-height: 138px;
+      padding: 24px;
+      text-align: center;
+    }
+
+    .impact-mini strong {
+      display: block;
+      color: var(--blue);
+      font: 800 54px/0.95 var(--font-display);
+    }
+
+    .impact-mini span {
+      display: block;
+      margin-top: 10px;
+      color: var(--muted);
+      font: 600 19px/1.25 var(--font-body);
+    }
+
+    /* ===========================================
+       SLIDE 7: FUTURE IMPLEMENTATION
+       Replaces placeholder roadmap copy with concrete next steps.
+       =========================================== */
+    .roadmap {
+      position: relative;
+      z-index: 2;
+      margin-top: 68px;
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 22px;
+    }
+
+    .roadmap::before {
+      content: "";
+      position: absolute;
+      left: 110px;
+      right: 110px;
+      top: 56px;
+      height: 4px;
+      border-radius: 4px;
+      background: linear-gradient(90deg, var(--blue), var(--green), var(--amber));
+      opacity: 0.32;
+    }
+
+    .roadmap-card {
+      position: relative;
+      min-height: 570px;
+      padding: 30px;
+    }
+
+    .roadmap-dot {
+      position: relative;
+      z-index: 2;
+      width: 78px;
+      height: 78px;
+      display: grid;
+      place-items: center;
+      border-radius: 24px;
+      background: var(--blue);
+      color: #fff;
+      font: 800 25px/1 var(--font-display);
+      box-shadow: 0 18px 42px rgba(23, 105, 232, 0.23);
+    }
+
+    .roadmap-card:nth-child(3) .roadmap-dot {
+      background: var(--green);
+    }
+
+    .roadmap-card:nth-child(4) .roadmap-dot {
+      background: var(--amber);
+    }
+
+    .roadmap-card h3 {
+      margin-top: 34px;
+      font: 800 34px/1.04 var(--font-display);
+      color: var(--ink);
+    }
+
+    .roadmap-card p {
+      margin-top: 18px;
+      color: var(--muted);
+      font: 500 22px/1.34 var(--font-body);
+    }
+
+    .roadmap-card ul {
+      margin: 24px 0 0;
+      padding: 0;
+      list-style: none;
+      display: grid;
+      gap: 14px;
+    }
+
+    .roadmap-card li {
+      position: relative;
+      padding-left: 24px;
+      color: #334155;
+      font: 600 19px/1.3 var(--font-body);
+    }
+
+    .roadmap-card li::before {
+      content: "";
+      position: absolute;
+      left: 0;
+      top: 9px;
+      width: 9px;
+      height: 9px;
+      border-radius: 50%;
+      background: var(--blue);
+    }
+
+    /* ===========================================
+       SLIDE 8: CLOSE WITH QR
+       Gives judges a memorable final ask and demo path.
+       =========================================== */
+    .close-layout {
+      position: relative;
+      z-index: 2;
+      display: grid;
+      grid-template-columns: 1.05fr 0.95fr;
+      gap: 70px;
+      height: 100%;
+      align-items: center;
+    }
+
+    .close-copy .big-title {
+      font-size: 96px;
+      max-width: 1040px;
+    }
+
+    .close-copy p {
+      margin-top: 28px;
+      max-width: 870px;
+      color: var(--muted);
+      font: 500 33px/1.35 var(--font-body);
+    }
+
+    .close-metrics {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 16px;
+      margin-top: 50px;
+      max-width: 890px;
+    }
+
+    .close-metric {
+      padding: 24px;
+      min-height: 138px;
+    }
+
+    .close-metric strong {
+      display: block;
+      color: var(--blue);
+      font: 800 50px/0.95 var(--font-display);
+    }
+
+    .close-metric span {
+      display: block;
+      margin-top: 10px;
+      color: var(--muted);
+      font: 600 18px/1.25 var(--font-body);
+    }
+
+    .qr-panel {
+      justify-self: center;
+      width: 548px;
+      padding: 34px;
+      text-align: center;
+    }
+
+    .qr-panel img {
+      width: 380px;
+      height: 380px;
+      object-fit: contain;
+      display: block;
+      margin: 0 auto;
+      border-radius: 18px;
+      background: #fff;
+    }
+
+    .qr-panel h3 {
+      margin-top: 30px;
+      font: 800 38px/1 var(--font-display);
+      color: var(--ink);
+    }
+
+    .qr-panel p {
+      margin-top: 12px;
+      color: var(--muted);
+      font: 500 23px/1.32 var(--font-body);
+    }
+
+    .by-signature {
+      position: absolute;
+      right: 92px;
+      bottom: 18px;
+      z-index: 4;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 10px 16px 10px 15px;
+      border-radius: 18px;
+      background: rgba(255, 255, 255, 0.76);
+      border: 1px solid rgba(17, 24, 39, 0.10);
+      box-shadow: 0 12px 32px rgba(17, 24, 39, 0.10);
+      backdrop-filter: blur(12px);
+    }
+
+    .by-signature span {
+      color: rgba(63, 70, 80, 0.70);
+      font: 800 20px/1 var(--font-display);
+    }
+
+    .by-signature img {
+      width: 50px;
+      height: 66px;
+      object-fit: contain;
+      display: block;
+      filter: drop-shadow(0 8px 12px rgba(71, 85, 105, 0.18));
+    }
+
+    /* ===========================================
+       CONTROLS AND INLINE EDITING
+       Browser navigation and editable slide text.
+       =========================================== */
+    .deck-controls {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 10px 14px;
+      border-radius: 999px;
+      background: rgba(14, 23, 36, 0.72);
+      color: #fff;
+      backdrop-filter: blur(18px);
+      box-shadow: 0 16px 44px rgba(14, 23, 36, 0.22);
+      font: 700 14px/1 var(--font-display);
+    }
+
+    .deck-controls button {
+      width: 36px;
+      height: 36px;
+      border: 0;
+      border-radius: 999px;
+      color: #fff;
+      background: rgba(255, 255, 255, 0.15);
+      cursor: pointer;
+      font: 800 18px/1 var(--font-display);
+    }
+
+    .deck-controls button:hover {
+      background: rgba(255, 255, 255, 0.26);
+    }
+
+    .edit-hotzone {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 84px;
+      height: 84px;
+      z-index: 10000;
+      cursor: pointer;
+    }
+
+    .edit-toggle {
+      position: fixed;
+      top: 18px;
+      left: 18px;
+      z-index: 10001;
+      height: 40px;
+      padding: 0 16px;
+      border: 0;
+      border-radius: 999px;
+      background: var(--blue);
+      color: #fff;
+      opacity: 0;
+      pointer-events: none;
+      cursor: pointer;
+      font: 800 14px/1 var(--font-display);
+      box-shadow: 0 14px 32px rgba(23, 105, 232, 0.26);
+      transition: opacity 220ms ease;
+    }
+
+    .edit-toggle.show,
+    .edit-toggle.active {
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    body.editing [data-editable] {
+      outline: 2px dashed rgba(23, 105, 232, 0.45);
+      outline-offset: 6px;
+      border-radius: 8px;
+      cursor: text;
+    }
+  </style>
+</head>
+<body>
+  <div class="deck-viewport" aria-label="Mercedes hackathon pitch deck">
+    <main class="deck-stage" id="deckStage">
+      <section class="slide active visible team-cover-slide" data-time="0:20" aria-label="Team cover">
+        <div class="team-cover">
+          <img class="team-logo reveal-scale" src="mercedes-hackathon-pitch-assets/tehOlimauais.png" alt="Teh O Limau Ais logo">
+          <h1 class="team-name reveal delay-1" data-editable>TehOLimauAis.</h1>
+        </div>
+      </section>
+
+      <section class="slide" data-time="0:25" aria-label="Connected intelligence analogy">
+        <div class="deck-mark">Why It Matters</div>
+        <div class="slide-number">02 / 08</div>
+        <div class="analogy-layout">
+          <div class="photo-frame reveal-scale">
+            <img src="mercedes-hackathon-pitch-assets/argentina-worldcup.jpg" alt="Argentina football team celebrating a World Cup win">
+          </div>
+          <div class="analogy-copy">
+            <!-- <h2 class="reveal-left delay-1" data-editable>Great teams win because every player shares the same picture.</h2> -->
+			 <h2 class="reveal-left delay-1" data-editable>The most powerful teams think as one.<br>So should our cars.</h2>
+            <p class="reveal-left delay-2" data-editable>Modern cars already have smart players: navigation, fatigue detection, battery prediction, and personal data. The missing part is the coach that connects them in real time.</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="slide" data-time="0:30" aria-label="Problem statement">
+        <div class="deck-mark">Problem Statement</div>
+        <div class="slide-number">03 / 08</div>
+        <h2 class="slide-title reveal delay-1" data-editable>The car is smart, but the journey still feels disconnected.</h2>
+        <p class="slide-subtitle reveal delay-2" data-editable>Three problems keep today's intelligent vehicle features from helping the driver at the exact moment they are needed.</p>
+        <div class="problem-grid">
+          <article class="card problem-card reveal delay-1">
+            <div class="problem-index">01</div>
+            <h3 data-editable>Lack of Personalization</h3>
+            <p data-editable>Current systems treat every driver the same and do not learn individual habits, leading to inaccurate and irrelevant recommendations.</p>
+          </article>
+          <article class="card problem-card reveal delay-2">
+            <div class="problem-index">02</div>
+            <h3 data-editable>Data is Collected but Not Used Wisely</h3>
+            <p data-editable>Modern cars collect driving style, battery usage, and location patterns, but this data rarely helps the driver in real time.</p>
+          </article>
+          <article class="card problem-card reveal delay-3">
+            <div class="problem-index">03</div>
+            <h3 data-editable>Isolated Vehicle Systems</h3>
+            <p data-editable>Smart features operate alone instead of working together, resulting in an inefficient and disconnected driving experience.</p>
+          </article>
+        </div>
+      </section>
+
+      <section class="slide" data-time="0:30" aria-label="Solution">
+        <div class="deck-mark">Solution</div>
+        <div class="slide-number">04 / 08</div>
+        <div class="solution-layout">
+          <div class="solution-hub reveal-scale">
+            <div class="hub-ring">
+              <span class="orbit-chip orbit-a">Trip Planner</span>
+              <span class="orbit-chip orbit-b">Fatigue Signal</span>
+              <span class="orbit-chip orbit-c">Battery Model</span>
+              <span class="orbit-chip orbit-d">Memory</span>
+              <div class="hub-core"><div><strong>MEME</strong><span>Mercedes Enhanced Mobility Engine</span></div></div>
+            </div>
+          </div>
+          <div>
+            <h2 class="slide-title reveal-left delay-1" data-editable>One central agent connects every driving signal.</h2>
+            <p class="slide-subtitle reveal-left delay-2" data-editable>MEME fuses route context, fatigue level, battery prediction, and preference memory before recommending the next best action.</p>
+            <div class="solution-points">
+              <article class="card solution-point reveal-left delay-2">
+                <div class="iconbox">
+                  <svg viewBox="0 0 48 48" aria-hidden="true"><path d="M8 36 C16 26 18 38 28 24 C34 15 40 17 44 10" fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round"/><circle cx="8" cy="36" r="4" fill="currentColor"/><circle cx="44" cy="10" r="4" fill="currentColor"/></svg>
+                </div>
+                <div><strong data-editable>Route-aware decisions</strong><span data-editable>Recommendations are based on the remaining route, not just what is nearby.</span></div>
+              </article>
+              <article class="card solution-point reveal-left delay-3">
+                <div class="iconbox">
+                  <svg viewBox="0 0 48 48" aria-hidden="true"><rect x="9" y="14" width="26" height="20" rx="5" fill="none" stroke="currentColor" stroke-width="4"/><path d="M36 21 h4 v6 h-4" fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round"/><path d="M19 32 l6 -9 h-7 l6 -9" fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                </div>
+                <div><strong data-editable>Opportunity bundling</strong><span data-editable>Rest and charging can become one useful stop instead of two interruptions.</span></div>
+              </article>
+              <article class="card solution-point reveal-left delay-4">
+                <div class="iconbox">
+                  <svg viewBox="0 0 48 48" aria-hidden="true"><path d="M14 33 C10 29 8 24 10 18 C13 9 25 7 31 14 C40 15 43 27 36 34 C31 39 21 39 14 33Z" fill="none" stroke="currentColor" stroke-width="4" stroke-linejoin="round"/><path d="M18 24 h12 M24 18 v12" stroke="currentColor" stroke-width="4" stroke-linecap="round"/></svg>
+                </div>
+                <div><strong data-editable>Preference learning</strong><span data-editable>Every accept or dismiss action improves future recommendations.</span></div>
+              </article>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="slide" data-time="0:40" aria-label="Animated MEME system flow">
+        <div class="deck-mark">System Flow</div>
+        <div class="slide-number">05 / 08</div>
+        <div class="flow-title">
+          <div class="eyebrow reveal" data-editable>How the System Connects</div>
+          <h2 class="reveal delay-1" data-editable>Three inputs. One driving brain.</h2>
+        </div>
+        <div class="flow-canvas">
+          <svg class="flow-lines" viewBox="0 0 1748 786" aria-hidden="true">
+            <path class="data-link" d="M610 286 C690 286 704 350 744 390" />
+            <path class="data-link" d="M610 646 C700 646 708 488 744 456" />
+            <path class="data-link" d="M1260 468 C1220 468 1192 414 1104 398" />
+            <path class="data-flow" d="M610 286 C690 286 704 350 744 390" />
+            <path class="data-flow flow-green" d="M610 646 C700 646 708 488 744 456" />
+            <path class="data-flow flow-amber" d="M1260 468 C1220 468 1192 414 1104 398" />
+          </svg>
+
+          <article class="flow-module flow-road reveal-scale delay-1">
+            <header>
+              <div class="flow-module-title">
+                <svg viewBox="0 0 48 48" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="3.6" stroke-linecap="round" stroke-linejoin="round"><path d="M10 39V12l10-4 10 4 8-3v27l-8 3-10-4-10 4Z"/><path d="M20 8v27M30 12v27"/><path d="M15 22c5-4 11 5 18-1"/></g></svg>
+                <span data-editable>Road Trip Planner</span>
+              </div>
+              <span class="flow-module-tag" data-editable>Route context</span>
+            </header>
+            <img src="mercedes-hackathon-pitch-assets/road-trip-real.png" alt="Road trip planner frontend UI">
+          </article>
+
+          <article class="flow-module flow-battery reveal-scale delay-2">
+            <header>
+              <div class="flow-module-title">
+                <svg viewBox="0 0 48 48" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="3.8" stroke-linecap="round" stroke-linejoin="round"><rect x="12" y="8" width="22" height="32" rx="4"/><path d="M18 4h10"/><path d="M25 14l-7 12h7l-4 8 10-14h-7l1-6Z"/></g></svg>
+                <span data-editable>EV Battery Predictor</span>
+              </div>
+              <span class="flow-module-tag" data-editable>Energy habits</span>
+            </header>
+            <img src="mercedes-hackathon-pitch-assets/battery-real.png" alt="EV battery predictor frontend UI">
+          </article>
+
+          <article class="flow-module flow-fatigue reveal-scale delay-3">
+            <header>
+              <div class="flow-module-title">
+                <svg viewBox="0 0 48 48" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="24" cy="19" r="8"/><path d="M11 40c2-9 8-14 13-14s11 5 13 14"/><path d="M35 12l4-4M39 18h5M9 18H4"/></g></svg>
+                <span data-editable>Driver Fatigue Detection</span>
+              </div>
+              <span class="flow-module-tag" data-editable>Safety signal</span>
+            </header>
+            <img src="mercedes-hackathon-pitch-assets/fatigue-real.png" alt="Driver fatigue detection frontend UI">
+          </article>
+
+          <section class="flow-hub reveal-scale delay-2" aria-label="MEME central decision hub">
+            <div class="chip-icon" aria-hidden="true">
+              <span class="chip-eye left"></span>
+              <span class="chip-eye right"></span>
+            </div>
+            <h3 data-editable>MEME</h3>
+            <p data-editable>Mercedes Enhanced Mobility Engine</p>
+            <div class="hub-pills" aria-hidden="true">
+              <span>learns</span>
+              <span>connects</span>
+              <span>acts</span>
+            </div>
+          </section>
+        </div>
+      </section>
+
+      <section class="slide" data-time="0:35" aria-label="AI versus no AI comparison">
+        <div class="deck-mark">AI vs No AI</div>
+        <div class="slide-number">06 / 08</div>
+        <h2 class="slide-title reveal delay-1" data-editable>From warning-only features to context-aware assistance.</h2>
+        <div class="comparison-layout">
+          <div class="scenario-list">
+            <article class="card scenario-card reveal-left delay-1"><strong data-editable>Fatigue alert</strong><span data-editable>Instead of only warning the driver, MEME finds a rest stop ahead on the active route.</span></article>
+            <article class="card scenario-card reveal-left delay-2"><strong data-editable>Road trip planning</strong><span data-editable>Natural language becomes a ranked route with stops, timing, and recommendations.</span></article>
+            <article class="card scenario-card reveal-left delay-3"><strong data-editable>Low EV battery</strong><span data-editable>Battery prediction is connected to route context, so charging can be recommended before anxiety starts.</span></article>
+            <article class="card scenario-card reveal-left delay-4"><strong data-editable>Personalization</strong><span data-editable>Accepted and dismissed places teach the system what the driver actually likes.</span></article>
+          </div>
+          <div class="card versus-table reveal-scale delay-2">
+            <div class="versus-head">
+              <div class="without-head">Without Central AI Agent</div>
+              <div class="with-head">With Central AI Agent</div>
+            </div>
+            <div class="versus-row"><p data-editable>Driver manually searches while tired.</p><p data-editable>AI recommends a route-relative rest stop in one tap.</p></div>
+            <div class="versus-row"><p data-editable>Driver plans each destination one by one.</p><p data-editable>AI parses intent and creates the route automatically.</p></div>
+            <div class="versus-row"><p data-editable>Driver guesses when and where to charge.</p><p data-editable>AI predicts usage and suggests the right charging moment.</p></div>
+            <div class="versus-row"><p data-editable>Every trip starts from zero.</p><p data-editable>Every trip improves future recommendations.</p></div>
+          </div>
+        </div>
+      </section>
+
+      <section class="slide" data-time="0:30" aria-label="Future implementation roadmap">
+        <div class="deck-mark">Future Implementation</div>
+        <div class="slide-number">07 / 08</div>
+        <h2 class="slide-title reveal delay-1" data-editable>From hackathon prototype to in-car intelligence.</h2>
+        <p class="slide-subtitle reveal delay-2" data-editable>Each step keeps the same core idea: connect more signals into one driver-controlled recommendation engine.</p>
+        <div class="roadmap">
+          <article class="card roadmap-card reveal delay-1">
+            <div class="roadmap-dot">Now</div>
+            <h3 data-editable>Working prototype</h3>
+            <p data-editable>Core demo is already connected around route planning, fatigue monitoring, battery prediction, and local preference memory.</p>
+            <ul>
+              <li data-editable>FastAPI backend</li>
+              <li data-editable>LangGraph agent flow</li>
+              <li data-editable>Google Maps UI shell</li>
+            </ul>
+          </article>
+          <article class="card roadmap-card reveal delay-2">
+            <div class="roadmap-dot">Next</div>
+            <h3 data-editable>Smarter recommendations</h3>
+            <p data-editable>Improve ranking by combining charger type, stop quality, fatigue severity, traffic, and driver preference weight.</p>
+            <ul>
+              <li data-editable>Route-aware charger scoring</li>
+              <li data-editable>Better accept/dismiss learning</li>
+              <li data-editable>More explainable recommendations</li>
+            </ul>
+          </article>
+          <article class="card roadmap-card reveal delay-3">
+            <div class="roadmap-dot">Pilot</div>
+            <h3 data-editable>Vehicle-ready integration</h3>
+            <p data-editable>Replace demo inputs with real vehicle telemetry and design the interface for a Mercedes-style in-car assistant.</p>
+            <ul>
+              <li data-editable>Live battery and speed signals</li>
+              <li data-editable>MBUX-style notification flow</li>
+              <li data-editable>Privacy and consent controls</li>
+            </ul>
+          </article>
+          <article class="card roadmap-card reveal delay-4">
+            <div class="roadmap-dot">Scale</div>
+            <h3 data-editable>Expandable agent ecosystem</h3>
+            <p data-editable>Weather, traffic, maintenance, and safety modules can plug into the same central decision layer.</p>
+            <ul>
+              <li data-editable>Modular agent registry</li>
+              <li data-editable>Fleet insights without exposing private habits</li>
+              <li data-editable>Continuous improvement per driver</li>
+            </ul>
+          </article>
+        </div>
+      </section>
+
+      <section class="slide" data-time="0:30" aria-label="Closing slide with QR code">
+        <div class="deck-mark">Demo</div>
+        <div class="slide-number">08 / 08</div>
+        <div class="close-layout">
+          <div class="close-copy">
+            <h2 class="big-title reveal delay-1" data-editable>MEME makes the EV feel like it finally understands the driver.</h2>
+            <p class="reveal delay-2" data-editable>Our assistant turns scattered vehicle signals into safer interventions, faster planning, smarter charging, and recommendations that improve every trip.</p>
+            <!-- <div class="close-metrics">
+              <div class="card close-metric reveal delay-2"><strong>Safer</strong><span data-editable>less manual searching during fatigue</span></div>
+              <div class="card close-metric reveal delay-3"><strong>Faster</strong><span data-editable>natural-language route planning</span></div>
+              <div class="card close-metric reveal delay-4"><strong>Personal</strong><span data-editable>memory improves each journey</span></div>
+            </div> -->
+          </div>
+          <div class="card qr-panel reveal-scale delay-3">
+            <img src="mercedes-hackathon-pitch-assets/qr-code.png" alt="QR code for project website">
+            <h3 data-editable>Scan for more details!</h3>
+          </div>
+          <div class="by-signature reveal delay-4" aria-label="By Teh O Limau Ais">
+            <span data-editable>By</span>
+            <img src="mercedes-hackathon-pitch-assets/tehOlimauais.png" alt="Teh O Limau Ais logo">
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <nav class="deck-controls" aria-label="Slide controls">
+    <button id="prevBtn" aria-label="Previous slide">&lt;</button>
+    <span id="slideStatus">1 / 8</span>
+    <button id="nextBtn" aria-label="Next slide">&gt;</button>
+  </nav>
+  <div class="edit-hotzone" aria-hidden="true"></div>
+  <button class="edit-toggle" id="editToggle" title="Edit mode (E)">Edit</button>
+
+  <script>
+    /* ===========================================
+       SLIDE PRESENTATION CONTROLLER
+       Handles scaling, keyboard, touch, and wheel navigation.
+       =========================================== */
+    class SlidePresentation {
+      constructor() {
+        this.slides = Array.from(document.querySelectorAll(".slide"));
+        this.currentSlide = 0;
+        this.stage = document.getElementById("deckStage");
+        this.status = document.getElementById("slideStatus");
+        this.wheelLock = false;
+        this.setupStageScale();
+        this.setupKeyboardNav();
+        this.setupTouchNav();
+        this.setupWheelNav();
+        this.setupButtons();
+        this.showSlide(0);
+      }
+
+      setupStageScale() {
+        const scale = () => {
+          const factor = Math.min(window.innerWidth / 1920, window.innerHeight / 1080);
+          const x = (window.innerWidth - 1920 * factor) / 2;
+          const y = (window.innerHeight - 1080 * factor) / 2;
+          this.stage.style.transform = `translate(${x}px, ${y}px) scale(${factor})`;
+        };
+        scale();
+        window.addEventListener("resize", scale);
+      }
+
+      setupButtons() {
+        document.getElementById("prevBtn").addEventListener("click", () => this.prev());
+        document.getElementById("nextBtn").addEventListener("click", () => this.next());
+      }
+
+      setupKeyboardNav() {
+        document.addEventListener("keydown", (event) => {
+          if (event.target && event.target.getAttribute("contenteditable") === "true") return;
+          if (["ArrowRight", " ", "PageDown"].includes(event.key)) {
+            event.preventDefault();
+            this.next();
+          }
+          if (["ArrowLeft", "PageUp"].includes(event.key)) {
+            event.preventDefault();
+            this.prev();
+          }
+          if (event.key === "Home") this.showSlide(0);
+          if (event.key === "End") this.showSlide(this.slides.length - 1);
+        });
+      }
+
+      setupTouchNav() {
+        let startX = 0;
+        let startY = 0;
+        window.addEventListener("touchstart", (event) => {
+          startX = event.changedTouches[0].clientX;
+          startY = event.changedTouches[0].clientY;
+        }, { passive: true });
+        window.addEventListener("touchend", (event) => {
+          const dx = event.changedTouches[0].clientX - startX;
+          const dy = event.changedTouches[0].clientY - startY;
+          if (Math.abs(dx) > 60 && Math.abs(dx) > Math.abs(dy)) {
+            if (dx < 0) this.next();
+            else this.prev();
+          }
+        }, { passive: true });
+      }
+
+      setupWheelNav() {
+        window.addEventListener("wheel", (event) => {
+          if (this.wheelLock) return;
+          if (Math.abs(event.deltaY) < 30) return;
+          this.wheelLock = true;
+          if (event.deltaY > 0) this.next();
+          else this.prev();
+          setTimeout(() => { this.wheelLock = false; }, 420);
+        }, { passive: true });
+      }
+
+      showSlide(index) {
+        this.currentSlide = Math.max(0, Math.min(index, this.slides.length - 1));
+        this.slides.forEach((slide, slideIndex) => {
+          const active = slideIndex === this.currentSlide;
+          slide.classList.toggle("active", active);
+          slide.classList.toggle("visible", active);
+        });
+        this.status.textContent = `${this.currentSlide + 1} / ${this.slides.length}`;
+      }
+
+      next() {
+        this.showSlide(this.currentSlide + 1);
+      }
+
+      prev() {
+        this.showSlide(this.currentSlide - 1);
+      }
+    }
+
+    /* ===========================================
+       INLINE EDITING CONTROLLER
+       Lets the presenter tune wording directly in the browser.
+       =========================================== */
+    class InlineEditor {
+      constructor() {
+        this.isActive = false;
+        this.storageKey = "mercedes-hackathon-pitch-v2-edits";
+        this.editables = Array.from(document.querySelectorAll("[data-editable]"));
+        this.load();
+        this.setup();
+      }
+
+      setup() {
+        this.editables.forEach((element, index) => {
+          element.dataset.editId = `edit-${index}`;
+          element.addEventListener("input", () => this.save());
+        });
+      }
+
+      toggleEditMode() {
+        this.isActive = !this.isActive;
+        document.body.classList.toggle("editing", this.isActive);
+        document.getElementById("editToggle").classList.toggle("active", this.isActive);
+        this.editables.forEach((element) => {
+          element.setAttribute("contenteditable", this.isActive ? "true" : "false");
+        });
+      }
+
+      save() {
+        const data = {};
+        this.editables.forEach((element) => {
+          data[element.dataset.editId] = element.innerHTML;
+        });
+        localStorage.setItem(this.storageKey, JSON.stringify(data));
+      }
+
+      load() {
+        try {
+          const data = JSON.parse(localStorage.getItem(this.storageKey) || "{}");
+          this.editables.forEach((element, index) => {
+            const key = `edit-${index}`;
+            if (data[key]) element.innerHTML = data[key];
+          });
+        } catch (error) {
+          console.warn("Could not load saved edits", error);
+        }
+      }
+    }
+
+    const presentation = new SlidePresentation();
+    const editor = new InlineEditor();
+
+    /* ===========================================
+       EDIT BUTTON VISIBILITY
+       Hover the top-left corner or press E to edit.
+       =========================================== */
+    const hotzone = document.querySelector(".edit-hotzone");
+    const editToggle = document.getElementById("editToggle");
+    let hideTimeout = null;
+
+    hotzone.addEventListener("mouseenter", () => {
+      clearTimeout(hideTimeout);
+      editToggle.classList.add("show");
+    });
+    hotzone.addEventListener("mouseleave", () => {
+      hideTimeout = setTimeout(() => {
+        if (!editor.isActive) editToggle.classList.remove("show");
+      }, 400);
+    });
+    editToggle.addEventListener("mouseenter", () => clearTimeout(hideTimeout));
+    editToggle.addEventListener("mouseleave", () => {
+      hideTimeout = setTimeout(() => {
+        if (!editor.isActive) editToggle.classList.remove("show");
+      }, 400);
+    });
+    editToggle.addEventListener("click", () => editor.toggleEditMode());
+    hotzone.addEventListener("click", () => editor.toggleEditMode());
+
+    document.addEventListener("keydown", (event) => {
+      if (event.target && event.target.getAttribute("contenteditable") === "true") return;
+      if (event.key === "e" || event.key === "E") editor.toggleEditMode();
+    });
+  </script>
+</body>
+</html>
