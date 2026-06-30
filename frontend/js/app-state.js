@@ -26,6 +26,11 @@ const state = {
     awaitingResponse: false,
     alertLocked: false,
     userStoppedDetection: false,
+    detectedSymptoms: {
+      "Eyes closed too long": false,
+      Yawning: false,
+      "Head nodding": false,
+    },
     isDragging: false,
     dragOffsetX: 0,
     dragOffsetY: 0,

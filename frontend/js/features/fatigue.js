@@ -228,6 +228,10 @@ function showFatigueNotification(notification) {
 
   elements.fatigueAlertModal.classList.remove("hidden");
   elements.fatigueAlertModal.setAttribute("aria-hidden", "false");
+
+  if (notification.severity === "high" || notification.severity === "critical") {
+    clearActiveSymptomPill();
+  }
 }
 
 function showGenericFatigueAlert() {
@@ -247,6 +251,7 @@ function showGenericFatigueAlert() {
 
   elements.fatigueAlertModal.classList.remove("hidden");
   elements.fatigueAlertModal.setAttribute("aria-hidden", "false");
+  clearActiveSymptomPill();
 }
 
 async function maybeRequestRestStopRecommendation(result) {
@@ -352,17 +357,86 @@ function formatFatigueSymptom(symptom, counts = {}) {
   return count ? `${symptom} x${count}` : symptom;
 }
 
-function updateFatigueSymptoms(symptoms, counts = {}) {
-  elements.fatigueSymptomsList.innerHTML = "";
+const fatigueSymptomOrder = ["Eyes closed too long", "Yawning", "Head nodding"];
 
-  if (!symptoms || symptoms.length === 0) {
+function ensureFatigueSymptomState() {
+  if (
+    !state.fatigue.detectedSymptoms ||
+    Array.isArray(state.fatigue.detectedSymptoms)
+  ) {
+    const previousSymptoms = Array.isArray(state.fatigue.detectedSymptoms)
+      ? state.fatigue.detectedSymptoms
+      : [];
+    state.fatigue.detectedSymptoms = {
+      "Eyes closed too long": previousSymptoms.includes("Eyes closed too long"),
+      Yawning: previousSymptoms.includes("Yawning"),
+      "Head nodding": previousSymptoms.includes("Head nodding"),
+    };
+  }
+}
+
+function fatigueSymptomsFromCounts(counts = {}) {
+  const symptoms = [];
+  if ((counts.eyeClosures || 0) > 0) {
+    symptoms.push("Eyes closed too long");
+  }
+  if ((counts.yawns || 0) > 0) {
+    symptoms.push("Yawning");
+  }
+  if ((counts.headNods || 0) > 0) {
+    symptoms.push("Head nodding");
+  }
+  return symptoms;
+}
+
+function areFatigueSymptomCountsReset(counts = {}) {
+  return (
+    (counts.eyeClosures || 0) === 0 &&
+    (counts.yawns || 0) === 0 &&
+    (counts.headNods || 0) === 0
+  );
+}
+
+function resetFatigueSymptoms() {
+  ensureFatigueSymptomState();
+  fatigueSymptomOrder.forEach((symptom) => {
+    state.fatigue.detectedSymptoms[symptom] = false;
+  });
+}
+
+function clearActiveSymptomPill() {
+  resetFatigueSymptoms();
+  updateFatigueSymptoms([]);
+}
+
+function updateFatigueSymptoms(symptoms, counts = {}) {
+  ensureFatigueSymptomState();
+  const nextSymptoms = [
+    ...(Array.isArray(symptoms) ? symptoms : []),
+    ...fatigueSymptomsFromCounts(counts),
+  ];
+
+  if (nextSymptoms.length === 0 && areFatigueSymptomCountsReset(counts)) {
+    resetFatigueSymptoms();
+  }
+
+  nextSymptoms.forEach((symptom) => {
+    if (symptom in state.fatigue.detectedSymptoms) {
+      state.fatigue.detectedSymptoms[symptom] = true;
+    }
+  });
+
+  elements.fatigueSymptomsList.innerHTML = "";
+  const latchedSymptoms = fatigueSymptomOrder.filter((symptom) => state.fatigue.detectedSymptoms[symptom]);
+
+  if (latchedSymptoms.length === 0) {
     const emptyItem = document.createElement("li");
     emptyItem.textContent = "No symptoms detected";
     elements.fatigueSymptomsList.appendChild(emptyItem);
     return;
   }
 
-  symptoms.forEach((symptom) => {
+  latchedSymptoms.forEach((symptom) => {
     const item = document.createElement("li");
     item.className = "active";
     item.textContent = formatFatigueSymptom(symptom, counts);
