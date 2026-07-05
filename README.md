@@ -1,4 +1,4 @@
-# 🚗 Mercedes EV Intelligent Driving Assistant
+# MEME (Mercedes Enhanced Mobility Engine)
 
 > **A centralized AI agent that orchestrates trip planning, fatigue detection, and battery prediction to deliver a safe, personalized, and intelligent EV driving experience.**
 
@@ -627,6 +627,3 @@ pytest backend/tests/test_fatigue_router.py -v
 
 This project is a prototype/demonstration of an intelligent EV driving assistant concept.
 
----
-
-*Built with ❤️ for safer, smarter, and more personal EV journeys.*
