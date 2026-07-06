@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="https://capsule-render.vercel.app/api?type=waving&height=260&section=header&color=0:0B1220,45:1769E8,100:24B46B&text=MEME&desc=Mercedes%20Enhanced%20Mobility%20Engine&fontColor=FFFFFF&fontSize=86&fontAlignY=38&descSize=24&descAlignY=58&animation=fadeIn" alt="MEME - Mercedes Enhanced Mobility Engine" />
+  <img src="https://capsule-render.vercel.app/api?type=waving&amp;height=260&amp;section=header&amp;color=0:0B1220,45:1769E8,100:24B46B&amp;text=MEME&amp;desc=Mercedes%20Enhanced%20Mobility%20Engine&amp;fontColor=FFFFFF&amp;fontSize=86&amp;fontAlignY=38&amp;descSize=24&amp;descAlignY=58&amp;animation=fadeIn" alt="MEME - Mercedes Enhanced Mobility Engine" />
 </p>
 
 <h1 align="center">MEME - Mercedes Enhanced Mobility Engine</h1>
@@ -55,27 +55,25 @@ The following screenshots are taken from the `mercedes-slides` finalist pitch as
 
 ### Road Trip Planner
 
-![Road Trip Planner UI](mercedes-slides/mercedes-hackathon-pitch-assets/road-trip-real.png)
+![Road Trip Planner UI](https://raw.githubusercontent.com/ethanlxz/mercedes-hackathon-2026/new_vers/mercedes-slides/mercedes-hackathon-pitch-assets/road-trip-real.png)
 
 ### EV Battery Predictor
 
-![EV Battery Predictor UI](mercedes-slides/mercedes-hackathon-pitch-assets/battery-real.png)
+![EV Battery Predictor UI](https://raw.githubusercontent.com/ethanlxz/mercedes-hackathon-2026/new_vers/mercedes-slides/mercedes-hackathon-pitch-assets/battery-real.png)
 
 ### Driver Fatigue Detection
 
-![Driver Fatigue Detection UI](mercedes-slides/mercedes-hackathon-pitch-assets/fatigue-real.png)
+![Driver Fatigue Detection UI](https://raw.githubusercontent.com/ethanlxz/mercedes-hackathon-2026/new_vers/mercedes-slides/mercedes-hackathon-pitch-assets/fatigue-real.png)
 
 ### Demo Video
 
-<video src="mercedes-slides/mercedes-hackathon-pitch-assets/mercedes-demo.mp4" controls width="100%">
-  Your browser does not support embedded videos. View the demo video at mercedes-slides/mercedes-hackathon-pitch-assets/mercedes-demo.mp4.
-</video>
+[![Watch the MEME demo video](https://raw.githubusercontent.com/ethanlxz/mercedes-hackathon-2026/new_vers/mercedes-slides/mercedes-hackathon-pitch-assets/road-trip-real.png)](https://github.com/ethanlxz/mercedes-hackathon-2026/raw/new_vers/mercedes-slides/mercedes-hackathon-pitch-assets/mercedes-demo.mp4)
 
-[Open the demo video](mercedes-slides/mercedes-hackathon-pitch-assets/mercedes-demo.mp4)
+[Open the demo video](https://github.com/ethanlxz/mercedes-hackathon-2026/raw/new_vers/mercedes-slides/mercedes-hackathon-pitch-assets/mercedes-demo.mp4)
 
 ### Pitch Team
 
-![TehOLimauAis team](mercedes-slides/mercedes-hackathon-pitch-assets/team-slide-9.jpg)
+![TehOLimauAis team](https://raw.githubusercontent.com/ethanlxz/mercedes-hackathon-2026/new_vers/mercedes-slides/mercedes-hackathon-pitch-assets/team-slide-9.jpg)
 
 ## Problem
 
