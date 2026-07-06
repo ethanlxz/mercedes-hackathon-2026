@@ -14,7 +14,7 @@ Built by **TehOLimauAis**.
 
 | Resource | Link |
 | --- | --- |
-| Pitch slides | [https://mercedes-slides.vercel.app/](https://mercedes-slides.vercel.app/) |
+| Project presentation | [https://mercedes-slides.vercel.app/](https://mercedes-slides.vercel.app/) |
 | Documentation website | [https://mercedes-docs.vercel.app/](https://mercedes-docs.vercel.app/) |
 
 ## Table of Contents
@@ -51,7 +51,7 @@ The result is an assistant that can:
 
 ## Product Screenshots
 
-The following screenshots are taken from the `mercedes-slides` finalist pitch assets.
+The following screenshots show the main MEME product experience across planning, battery intelligence, fatigue detection, and driver-facing recommendations.
 
 ### Road Trip Planner
 
@@ -71,25 +71,25 @@ The following screenshots are taken from the `mercedes-slides` finalist pitch as
 
 [Open the demo video](https://github.com/ethanlxz/mercedes-hackathon-2026/raw/new_vers/mercedes-slides/mercedes-hackathon-pitch-assets/mercedes-demo.mp4)
 
-### Pitch Team
+### Team
 
 ![TehOLimauAis team](https://raw.githubusercontent.com/ethanlxz/mercedes-hackathon-2026/new_vers/mercedes-slides/mercedes-hackathon-pitch-assets/team-slide-9.jpg)
 
 ## Problem
 
-The slide deck frames the project around the paradox of the connected car: vehicles collect rich data and contain advanced features, but the driver experience often remains fragmented.
+Connected vehicles already collect rich driving data and include many advanced features, but the driver experience is still fragmented. Navigation, fatigue alerts, battery prediction, and personalization often work as separate systems instead of sharing context and acting together.
 
 ### 1. Lack of Personalization
 
-Vehicle systems often fail to learn driver habits. Route suggestions, charging guidance, and rest-stop recommendations can feel generic even after repeated trips.
+Vehicle systems often fail to learn driver habits. Route suggestions, charging guidance, and rest-stop recommendations can feel generic even after repeated trips because the car does not build a meaningful preference memory around the driver.
 
 ### 2. Data Is Collected but Not Used Wisely
 
-Cars collect route history, driving style, battery behavior, and usage patterns, but that data rarely turns into immediate, driver-facing value.
+Cars collect route history, driving style, battery behavior, and usage patterns, but that data rarely turns into immediate, driver-facing value. The driver should benefit from their own data through better recommendations, smarter route choices, and more accurate battery guidance.
 
 ### 3. Isolated Vehicle Systems
 
-Fatigue alerts, navigation, range prediction, and recommendation systems are usually separated. A tired driver may receive an alert, but the system does not automatically use the active route to find a safe rest stop ahead.
+Fatigue alerts, navigation, range prediction, and recommendation systems are usually separated. A tired driver may receive an alert, but the system does not automatically combine fatigue risk, route context, nearby places, and personal preferences to recommend a useful rest stop ahead.
 
 ## Solution
 
@@ -447,7 +447,7 @@ flowchart TB
 | Frontend | HTML, CSS, vanilla JavaScript, Google Maps JavaScript API |
 | Persistence | SQLite for graph checkpoints, JSON for user memory |
 | Testing | Pytest |
-| Pitch deck | Static HTML slide deck deployed on Vercel |
+| Presentation site | Static HTML project presentation deployed on Vercel |
 
 ## Project Structure
 
@@ -653,7 +653,7 @@ pytest backend\tests\test_fatigue_router.py -v
 
 ## Roadmap
 
-The finalist deck highlights the next stage for MEME:
+Planned next steps for MEME:
 
 - Integrate native Mercedes systems such as Attention Assist, GUARD360, and DYNAMIC SELECT.
 - Add more vehicle modules without rebuilding the central agent.
