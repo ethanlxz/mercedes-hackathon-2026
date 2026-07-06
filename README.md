@@ -1,6 +1,10 @@
-# MEME - Mercedes Enhanced Mobility Engine
+<p align="center">
+  <img src="https://capsule-render.vercel.app/api?type=waving&height=260&section=header&color=0:0B1220,45:1769E8,100:24B46B&text=MEME&desc=Mercedes%20Enhanced%20Mobility%20Engine&fontColor=FFFFFF&fontSize=86&fontAlignY=38&descSize=24&descAlignY=58&animation=fadeIn" alt="MEME - Mercedes Enhanced Mobility Engine" />
+</p>
 
-**Mercedes Vibathon 2026 Finalist Project**
+<h1 align="center">MEME - Mercedes Enhanced Mobility Engine</h1>
+
+<h2 align="center">Mercedes Vibathon 2026 Finalist Project</h2>
 
 MEME is a centralized AI driving assistant that connects route planning, EV battery prediction, driver fatigue detection, and preference memory into one coordinated mobility engine. Instead of treating each vehicle feature as a separate tool, MEME acts as a unified decision layer that understands the full trip context and recommends the next safest, most useful action for the driver.
 
