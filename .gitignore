@@ -8,6 +8,5 @@ backend/data/trip_planner.sqlite*
 backend/data/central_agent.sqlite*
 .pytest_cache/
 .matplotlib-cache/
-mercedes-slides/
 meme-docs/
 meme-docsv2/
